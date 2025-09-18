@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Verify Your Email</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="verify-container" style="max-width:640px;margin:6rem auto;padding:1.5rem;border-radius:12px;background:#fff;box-shadow:0 8px 30px rgba(0,0,0,0.06);">
+    <h2>Verify Your Email</h2>
+    <p id="verifyIntro">We sent a verification link to <strong id="verifyEmail"></strong>.</p>
+    <p>Please open the message in your inbox and click the verification link. After verifying, return here and click "Back to Sign In" to log in.</p>
+    <div id="verifyMessage" style="min-height:20px;color:#ea4335;margin-bottom:12px"></div>
+
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      <a id="backToLogin" class="button-bar" style="padding:10px;text-decoration:none;display:inline-block;">Back to Sign In</a>
+      <button id="resendHint" style="padding:10px;">Didn't receive it?</button>
+    </div>
+    <p style="margin-top:12px;font-size:0.9rem;color:#666;">Tip: If you don't see the email, check your spam/junk folder. To resend a verification link, try signing in — the app will resend the link automatically for unverified accounts.</p>
+  </div>
+
+  <script>
+    function getQueryParam(name){
+      const url = new URL(window.location.href);
+      return url.searchParams.get(name);
+    }
+
+    const verifyEmailEl = document.getElementById('verifyEmail');
+    const verifyMessage = document.getElementById('verifyMessage');
+    const backToLogin = document.getElementById('backToLogin');
+    const resendHint = document.getElementById('resendHint');
+
+    const email = getQueryParam('email') || localStorage.getItem('pendingVerificationEmail') || '';
+    if(email) verifyEmailEl.textContent = email;
+
+    backToLogin.href = '/';
+    // Pre-fill email on the login page via query param
+    backToLogin.addEventListener('click', (e) => {
+      e.preventDefault();
+      const url = '/?email=' + encodeURIComponent(email);
+      window.location.href = url;
+    });
+
+    resendHint.addEventListener('click', () => {
+      verifyMessage.style.color = '#2e7d32';
+      verifyMessage.textContent = 'To resend a verification link: go back to Sign In and attempt to sign in. The app will send a new verification link for unverified accounts.';
+    });
+  </script>
+</body>
+</html>
+      const code = codeInput.value.trim();

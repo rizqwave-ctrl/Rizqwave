@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Family Chores Kanban</title>
+
+  <!-- PWA Meta -->
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <meta name="theme-color" content="#3399ff" />
+
+  <!-- Styles and Libraries -->
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Firebase App (the core Firebase SDK, compat version) -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+  <!-- Firebase Authentication (compat version) -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
+    <!-- Add this after your Firebase scripts and before </head> -->
+<script src="https://js.stripe.com/v3/"></script>
+  <!-- rrule.js for recurrence handling -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/rrule/2.7.1/rrule.min.js"></script>
+</head>
+<body>
+  <!-- Login Overlay -->
+  <div id="loginOverlay" style="position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(255,255,255,0.95);z-index:9999;display:none;align-items:center;justify-content:center;flex-direction:column;">
+    <div style="width:100%;max-width:420px;padding:1.5rem;border-radius:12px;background:#fff;box-shadow:0 8px 30px rgba(0,0,0,0.08);">
+      <h2 style="margin-bottom:1rem; font-size:1.6rem; text-align:center;">Welcome to Family Chores</h2>
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <!-- Auth message area: accessible, announced to screen readers -->
+      <div id="authMessage" role="alert" aria-live="polite" style="margin-bottom:0.75rem;min-height:1.2rem;color:#e74c3c;font-weight:600;text-align:center;"></div>
+        <button id="showLoginBtn" class="auth-tab-btn" style="flex:1;padding:8px;">Login</button>
+        <button id="showSignupBtn" class="auth-tab-btn" style="flex:1;padding:8px;">Sign up</button>
+      </div>
+      <form id="loginForm" style="display:none;" autocomplete="on">
+        <div style="margin-bottom:8px;"><input type="email" id="loginEmail" class="auth-input" placeholder="Email" required style="width:100%;padding:10px;border-radius:8px;border:1px solid #e6e6e6;"></div>
+        <div style="margin-bottom:8px;"><input type="password" id="loginPassword" class="auth-input" placeholder="Password" required style="width:100%;padding:10px;border-radius:8px;border:1px solid #e6e6e6;"></div>
+        <div style="display:flex;gap:8px;align-items:center;justify-content:center;margin-bottom:8px;">
+          <button type="button" id="loginBtnOverlay" class="google-auth-btn" aria-label="Sign in with Google" style="flex:1;">🔑 Sign in with Google</button>
+        </div>
+        <div style="text-align:center;margin-top:-6px;margin-bottom:8px;">
+          <a href="#" id="loginRedirectLink" style="font-size:0.9rem;color:#357abd;">Use redirect sign-in</a>
+        </div>
+      </form>
+
+      <form id="signupForm" style="display:none;" autocomplete="on">
+        <div style="margin-bottom:8px;"><input type="text" id="signupDisplayName" class="auth-input" placeholder="Display name" required style="width:100%;padding:10px;border-radius:8px;border:1px solid #e6e6e6;"></div>
+        <div style="margin-bottom:8px;"><input type="email" id="signupEmail" class="auth-input" placeholder="Email" required style="width:100%;padding:10px;border-radius:8px;border:1px solid #e6e6e6;"></div>
+        <div style="margin-bottom:8px;"><input type="password" id="signupPassword" class="auth-input" placeholder="Password (min 8 chars)" required style="width:100%;padding:10px;border-radius:8px;border:1px solid #e6e6e6;"></div>
+        <div style="display:flex;gap:8px;align-items:center;justify-content:center;margin-bottom:8px;flex-direction:column;">
+          <button type="submit" id="signupBtn" class="auth-submit-btn" style="width:100%;">Create account</button>
+          <button type="button" id="signupGoogleBtn" class="google-auth-btn" style="width:100%;margin-top:8px;">🔑 Continue with Google</button>
+          <a href="#" id="signupRedirectLink" style="font-size:0.9rem;color:#357abd;margin-top:6px;">Use redirect sign-in</a>
+        </div>
+      </form>
+      <!-- authMessage element is used for friendly user-facing messages; kept above -->
+      <div id="resendVerificationArea" style="margin-top:8px;text-align:center;display:none;">
+        <div style="font-size:0.95rem;color:#444;margin-bottom:6px;">Didn't receive the email? Check your spam folder or click below to resend.</div>
+        <button id="resendVerificationBtn" style="padding:8px 12px;border-radius:8px;background:#357abd;color:white;border:none;cursor:pointer;">Resend verification link</button>
+      </div>
+    </div>
+  </div>
+  <!-- Main App Content -->
+  <div id="mainAppContent">
+    <!-- Sidebar Toggle Button -->
+    <button id="sidebarToggle" class="sidebar-toggle">☰</button>
+
+    <!-- Weather and Time Info -->
+    <div id="weatherInfo" class="weather-info">
+      <div class="weather-header">
+        <span id="weatherEmoji" class="weather-emoji">🌤️</span>
+        <div id="temperature" class="temperature">--°C</div>
+      </div>
+      <div class="weather-details">
+        <div id="weatherDesc" class="weather-desc">Loading...</div>
+        <div id="weatherLocation" class="weather-location">📍 Location</div>
+      </div>
+      <div id="dateTime" class="date-time">
+        <div id="currentDate"></div>
+        <div id="currentTime"></div>
+      </div>
+    </div>
+    <!-- Sidebar Menu -->
+  <div id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+      <h3>Menu</h3>
+      <button id="closeSidebar" class="close-sidebar">&times;</button>
+    <button id="loginBtn" class="sidebar-btn">🔑 Login</button>
+  <!-- Floating Logout Button -->
+  <button id="logoutBtn" class="floating-logout-btn hidden">🚪 Logout</button>
+  <style>
+    .floating-logout-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 80px;
+  z-index: 9999;
+  background: #3399ff;
+  color: #fff;
+  border: none;
+  border-radius: 24px;
+  padding: 0.45rem 1.1rem;
+  font-size: 1rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s;
+  min-width: 0;
+  max-width: 160px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+    }
+    .floating-logout-btn:hover {
+      background: #2677cc;
+    }
+    /* When the top login button should be visually disabled while the overlay/login UI is active */
+    #loginBtn.disabled-login {
+      filter: grayscale(60%) blur(1px) opacity(0.6);
+      pointer-events: none;
+      cursor: default;
+    }
+  </style>
+    </div>
+        <!-- code change RK -->
+      <div id="loggedInUser" style="padding: 1rem; font-size: 1.2rem; font-weight: bold; color: #4a90e2;">
+    <!-- Username will be displayed here -->
+  </div>
+     <!-- code change RK -->
+    <div class="sidebar-content">
+	<!-- Add this in the sidebar content section -->
+<button id="sidebarSubscription" class="sidebar-btn">💳 Premium Subscription</button>
+  <button id="sidebarAddMember" class="sidebar-btn">➕ Add Member</button>
+    <button id="sidebarCalendar" class="sidebar-btn">📅 Family Calendar</button>
+
+  <button id="sidebarWeeklySummary" class="sidebar-btn">📊 Weekly Summary</button>
+  <button id="sidebarProgressChart" class="sidebar-btn">📈 Progress Chart</button>
+  <button id="sidebarVoiceCommand" class="sidebar-btn">🎤 Voice Commands</button>
+  <button id="sidebarBadges" class="sidebar-btn">🏆 Badges</button>
+  <button id="sidebarGoals" class="sidebar-btn">🎯 Family Goals</button>
+  <button id="sidebarRewards" class="sidebar-btn">🎁 Reward Store</button>
+  <button id="sidebarLeaderboard" class="sidebar-btn">🏆 Leaderboard</button>
+  <button id="sidebarReset" class="sidebar-btn">🔁 Reset Now</button>
+  <button id="sidebarAppInfo" class="sidebar-btn">ℹ️ App Info</button>
+    </div>
+  </div>
+  
+  <!-- Sidebar Overlay -->
+  <div id="sidebarOverlay" class="sidebar-overlay"></div>
+
+  <div id="pageTitle" style="display: flex; align-items: center; justify-content: center; gap: 0.8rem; margin: 5rem 0 1rem 0; position: relative; z-index: 1000;">
+    <span id="titleAvatar" style="width: 90px; height: 90px; border-radius: 50%; background: linear-gradient(135deg, #4a90e2, #357abd); display: flex; align-items: center; justify-content: center; font-size: 3rem; color: white; font-weight: bold; box-shadow: 0 4px 15px rgba(74, 144, 226, 0.3); transition: transform 0.3s ease; cursor: pointer;">👨‍👩‍👧‍👦</span>
+    <h1 style="margin: 0; cursor: pointer; font-size: 2.5rem; color: #333;">
+      <span>Family Chores</span>
+    </h1>
+  </div>
+  <div id="kanban" class="kanban-board"></div>
+
+  <!-- Add Member Popup -->
+  <div id="addMemberPopup" class="popup-overlay hidden">
+    <div class="popup-content">
+      <h2>Add New Member</h2>
+      <label>
+        Name: <input type="text" id="newMemberName" />
+      </label>
+      <label>
+        Color: <input type="color" id="newMemberColor" value="#4a90e2" />
+      </label>
+      <label>
+        Avatar Picture (optional): <input type="file" id="newMemberAvatar" accept="image/*" />
+      </label>
+      <div class="popup-buttons">
+        <button id="addMemberConfirm">Add</button>
+        <button id="addMemberCancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+  
+<!-- Progress Chart Modal -->
+<div id="progressChartModal" class="modal">
+  <div class="modal-content">
+    <span class="close-btn" id="closeProgressChartModal">&times;</span>
+    <h2>📈 Today's Progress</h2>
+    <canvas id="progressChart"></canvas>
+  </div>
+</div>
+ 
+
+<!-- Weekly Summary Modal -->
+<div id="weeklyModal" class="modal">
+  <div class="modal-content">
+    <span class="close-btn" id="closeWeeklyModal">&times;</span>
+    <h2>🌟 Weekly Star Summary</h2>
+    <div id="weeklySummaryContent"></div>
+    <button id="exportWeeklyBtn">📥 Export CSV</button>
+    <button id="resetWeeklyBtn">🧹 Reset Weekly</button>
+  </div>
+</div>
+
+<!-- Calendar Modal -->
+<div id="calendarModal" class="modal">
+  <div class="modal-content">
+    <span class="close-btn" id="closeCalendarModal">&times;</span>
+    <h2>📅 Family Calendar</h2>
+    <div class="calendar-controls" style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+      <div style="display:flex;gap:8px;">
+        <button id="prevMonth">◀ Prev Month</button>
+        <button id="prevWeek">◀ Prev Week</button>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+        <button id="viewToggle" class="btn-toggle">Month View</button>
+        <button id="nextWeek">Next Week ▶</button>
+        <button id="nextMonth">Next Month ▶</button>
+        <button id="exportICalBtn" style="margin-left:8px;">Export iCal</button>
+      </div>
+    </div>
+    <div id="calendarContent" style="min-height:220px;">
+      <!-- Calendar will be injected here -->
+    </div>
+  </div>
+</div>
+
+<!-- Smart Suggestions Modal -->
+
+
+<!-- App Info Modal -->
+<div id="appInfoModal" class="modal">
+  <div class="modal-content">
+    <span class="close-btn" id="closeAppInfoModal">&times;</span>
+    <h2>📱 Family Chores App</h2>
+    <div id="appInfoContent">
+      <div class="app-info-section">
+        <h3>🌟 Welcome to Family Chores!</h3>
+        <p>A fun and interactive way to manage family chores, track progress, and motivate everyone with rewards and daily logs!</p>
+      </div>
+      
+      <div class="app-info-section">
+        <h3>✨ Key Features:</h3>
+        <ul class="feature-list">
+          <li>🏠 <strong>Family Management:</strong> Add and customize family members with colors and avatars</li>
+          <li>⏰ <strong>Time-Based Organization:</strong> Organize chores by Morning, Afternoon, and Evening</li>
+          <li>🎯 <strong>Interactive Kanban Board:</strong> Drag and drop chores to reorder them</li>
+          <li>⭐ <strong>Star Rewards System:</strong> Earn stars for completing chores and redeem them in the Reward Store</li>
+          <li>� <strong>Reward Store:</strong> Create, edit, and redeem custom rewards for stars</li>
+          <li>📅 <strong>Daily Logs:</strong> Track completed chores, earned/deducted stars, and redeemed rewards each day</li>
+          <li>🌟 <strong>Total Lifetime Stars:</strong> See each member's all-time star count</li>
+          <li>✅ <strong>Confirmation Popups:</strong> Confirm before deleting chores, rewards, or resetting progress</li>
+          <li>�📊 <strong>Progress Tracking:</strong> Visual charts to track daily progress</li>
+          <li>📈 <strong>Weekly Summary:</strong> Comprehensive weekly performance reports</li>
+          <li>🌤️ <strong>Weather Integration:</strong> Beautiful weather-based backgrounds</li>
+          <li>📱 <strong>Mobile Friendly:</strong> Works perfectly on all devices</li>
+          <li>🎨 <strong>Customizable:</strong> Edit titles, avatars, and chore details</li>
+          <li>🎉 <strong>Celebrations:</strong> Fun animations when chores are completed</li>
+          <li>💾 <strong>Auto-Save:</strong> All progress is automatically saved locally</li>
+          <li>📤 <strong>Export Data:</strong> Export weekly summaries as CSV files</li>
+          <li>🧹 <strong>Flexible Reset:</strong> Reset weekly or daily progress with confirmation</li>
+        </ul>
+      </div>
+      
+      <div class="app-info-section">
+        <h3>🚀 How to Use:</h3>
+        <ol class="usage-list">
+          <li>Add family members using the "Add Member" button</li>
+          <li>Click on chores to mark them as complete and earn stars</li>
+          <li>Use the + button to add new custom chores</li>
+          <li>Drag and drop chores to reorder them</li>
+          <li>Switch between Morning, Afternoon, and Evening tabs</li>
+          <li>Redeem stars for rewards in the Reward Store</li>
+          <li>View daily logs for completed chores, earned/deducted stars, and redeemed rewards</li>
+          <li>View progress charts and weekly summaries</li>
+          <li>Customize avatars and titles by clicking on them</li>
+          <li>Use confirmation popups to safely delete or reset items</li>
+        </ol>
+      </div>
+      
+      <div class="app-info-section">
+        <h3>🎨 Customization Tips:</h3>
+        <ul class="tips-list">
+          <li>Click on any avatar to change the profile picture</li>
+          <li>Click on the main title to edit it</li>
+          <li>Use the gear icon (⚙️) to edit individual chores</li>
+          <li>Each family member can have their own color theme</li>
+          <li>Edit or delete chores and rewards with confirmation popups</li>
+          <li>Reorder menu buttons for your preferred workflow</li>
+          <li>Check daily logs for a summary of each day's activity</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Voice Recognition Modal -->
+<div id="voiceModal" class="modal">
+  <div class="modal-content">
+    <span class="close-btn" id="closeVoiceModal">&times;</span>
+    <h2>🎤 Voice Command</h2>
+    <div id="voiceStatus">Click the microphone to start</div>
+    <button id="voiceButton" class="voice-button">🎤 Start Listening</button>
+    <div id="voiceResult"></div>
+  </div>
+</div>
+
+<!-- Photo Proof Modal -->
+<div id="photoModal" class="modal">
+  <div class="modal-content">
+    <span class="close-btn" id="closePhotoModal">&times;</span>
+    <h2>📸 Photo Proof</h2>
+    <div id="photoChoreInfo"></div>
+    <video id="cameraPreview" autoplay playsinline style="display: none; width: 100%; max-width: 400px; border-radius: 10px;"></video>
+    <canvas id="photoCanvas" style="display: none;"></canvas>
+    <div id="photoButtons">
+      <button id="startCamera">📷 Start Camera</button>
+      <button id="takePhoto" style="display: none;">📸 Take Photo</button>
+      <button id="confirmPhoto" style="display: none;">✅ Confirm</button>
+      <button id="retakePhoto" style="display: none;">🔄 Retake</button>
+    </div>
+    <div id="photoPreview"></div>
+  </div>
+</div>
+
+<!-- Achievement Badges Modal -->
+<div id="badgesModal" class="modal">
+  <div class="modal-content">
+    <span class="close-btn" id="closeBadgesModal">&times;</span>
+    <h2>🏆 Achievement Badges</h2>
+    <div id="badgesContent"></div>
+  </div>
+</div>
+
+<!-- Family Goals Modal -->
+<div id="goalsModal" class="modal">
+  <div class="modal-content">
+    <span class="close-btn" id="closeGoalsModal">&times;</span>
+    <h2>🎯 Family Goals</h2>
+    <div id="goalsContent"></div>
+    <button id="addGoalBtn">➕ Add New Goal</button>
+  </div>
+</div>
+
+<!-- Reward Store Modal -->
+<div id="rewardModal" class="modal">
+  <div class="modal-content">
+    <span class="close-btn" id="closeRewardModal">&times;</span>
+    <h2>🎁 Reward Store</h2>
+    <div id="rewardContent"></div>
+    <div style="display:flex; justify-content:center; margin-top:1.2rem;">
+      <button id="addRewardBtn" style="padding:0.6rem 1.4rem; font-size:1rem; border-radius:6px;">➕ Add New Reward</button>
+    </div>
+  </div>
+</div>
+
+<!-- Leaderboard Modal -->
+<div id="leaderboardModal" class="modal">
+  <div class="modal-content">
+    <span class="close-btn" id="closeLeaderboardModal">&times;</span>
+    <h2>🏆 Family Leaderboard</h2>
+    <div class="leaderboard-tabs">
+      <button class="tab-btn active" data-period="monthly">Monthly</button>
+      <button class="tab-btn" data-period="yearly">Yearly</button>
+    </div>
+    <div id="leaderboardContent"></div>
+  </div>
+</div>
+
+<!-- Difficulty Selection Modal -->
+<div id="difficultyModal" class="modal">
+  <div class="modal-content">
+    <span class="close-btn" id="closeDifficultyModal">&times;</span>
+    <h2>⭐ Select Difficulty</h2>
+    <div id="difficultyChoreInfo"></div>
+    <div class="difficulty-options">
+      <button class="difficulty-btn easy" data-difficulty="easy">
+        <span class="difficulty-emoji">🟢</span>
+        <span class="difficulty-name">Easy</span>
+        <span class="difficulty-stars">1 ⭐</span>
+      </button>
+      <button class="difficulty-btn medium" data-difficulty="medium">
+        <span class="difficulty-emoji">🟡</span>
+        <span class="difficulty-name">Medium</span>
+        <span class="difficulty-stars">2 ⭐</span>
+      </button>
+      <button class="difficulty-btn hard" data-difficulty="hard">
+        <span class="difficulty-emoji">🔴</span>
+        <span class="difficulty-name">Hard</span>
+        <span class="difficulty-stars">3 ⭐</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Subscription Modal -->
+<div id="subscriptionModal" class="modal">
+  <div class="modal-content">
+    <span class="close-btn" onclick="document.getElementById('subscriptionModal').style.display='none'">&times;</span>
+    <div id="subscription-section">
+      <h2>🌟 Upgrade to Premium</h2>
+      <div id="subscription-content">
+        <div class="pricing-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 2rem; border-radius: 15px; text-align: center; margin: 1rem 0;">
+          <h3>Premium Plan</h3>
+          <div style="font-size: 2rem; font-weight: bold; margin: 1rem 0;">$9.99/month</div>
+          <ul style="list-style: none; padding: 0; margin: 1rem 0;">
+            <li>✅ Unlimited chores for all family members</li>
+            <li>✅ Advanced progress tracking & analytics</li>
+            <li>✅ Custom reward categories</li>
+            <li>✅ Priority support & new features first</li>
+            <li>✅ Export data & family reports</li>
+          </ul>
+          <button id="subscribe-btn" style="background: white; color: #667eea; border: none; padding: 1rem 2rem; border-radius: 25px; font-weight: bold; font-size: 1.1rem; cursor: pointer; margin-top: 1rem;">Subscribe Now</button>
+        </div>
+        
+        <div id="subscription-status" style="display: none; text-align: center; padding: 2rem;">
+          <h3>🎉 Your Premium Subscription</h3>
+          <p id="status-text"></p>
+          <button id="manage-subscription" style="background: #4a90e2; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 10px; cursor: pointer;">Manage Subscription</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- Notification Permission Banner -->
+<div id="notificationBanner" class="notification-banner" style="display: none;">
+  <span>🔔 Enable notifications to get chore reminders!</span>
+  <button id="enableNotifications">Enable</button>
+  <button id="dismissNotifications">×</button>
+</div>
+
+<!-- Popup-block Banner (used when popup fallback occurs) -->
+<div id="popupBlockedBanner" style="display:none;position:fixed;top:12px;left:50%;transform:translateX(-50%);background:#fff8e1;border:1px solid #ffd54f;padding:10px 14px;border-radius:8px;z-index:10002;box-shadow:0 2px 8px rgba(0,0,0,0.06);">Popup blocked. We tried a redirect sign-in instead. <button id="popupDismiss" style="margin-left:8px;">Dismiss</button></div>
+
+<!-- Company Branding -->
+<div class="company-branding">
+  Designed by Rizqwave Technologies
+</div>
+  <script src="app.js"></script>
+  <script src="script.js"></script>
+  <script>
+    // Prefill login email from query param or pendingVerificationEmail
+    (function(){
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const emailFromQuery = params.get('email');
+        const nameFromQuery = params.get('name');
+        const pendingEmail = localStorage.getItem('pendingVerificationEmail');
+        const pendingName = localStorage.getItem('pendingDisplayName');
+        const email = emailFromQuery || pendingEmail || '';
+        const name = nameFromQuery || pendingName || '';
+        if (email) {
+          const el = document.getElementById('loginEmail');
+          if (el) {
+            el.value = email;
+            // If password field exists, focus it for quicker login
+            const pwd = document.getElementById('loginPassword');
+            if (pwd) pwd.focus();
+          }
+        }
+        if (name) {
+          const s = document.getElementById('signupDisplayName');
+          if (s) s.value = name;
+        }
+      } catch (e) { console.warn('Prefill email/name failed', e); }
+    })();
+  </script>
+</body>
+</html>

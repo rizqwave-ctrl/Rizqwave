@@ -1,0 +1,8 @@
+{
+  "projects": {
+    "default": "rizqwave",
+    "staging": "rizqwave"
+  },
+  "targets": {},
+  "etags": {}
+}

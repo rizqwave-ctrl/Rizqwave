@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Success - Family Chores</title>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .success-container {
+            background: white;
+            border-radius: 20px;
+            padding: 3rem;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-width: 500px;
+        }
+        .success-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+        h1 {
+            color: #28a745;
+            margin-bottom: 1rem;
+        }
+        p {
+            color: #666;
+            margin-bottom: 2rem;
+            font-size: 1.1rem;
+        }
+        .btn {
+            background: linear-gradient(135deg, #4a90e2, #357abd);
+            color: white;
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(74, 144, 226, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="success-container">
+        <div class="success-icon">🎉</div>
+        <h1>Payment Successful!</h1>
+        <p>Welcome to Family Chores Premium! Your subscription is now active and you have access to all premium features.</p>
+        <a href="/" class="btn">Return to App</a>
+    </div>
+    
+    <script>
+        // Optional: Auto-redirect after 5 seconds
+        setTimeout(() => {
+            window.location.href = '/';
+        }, 5000);
+    </script>
+</body>
+</html>
