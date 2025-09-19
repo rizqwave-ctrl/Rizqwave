@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Family Chores — Quick Reference</title>
+    <style>
+        /* Print-friendly single-page layout */
+        @page {
+            size: A4 portrait;
+            margin: 18mm;
+        }
+
+        html,
+        body {
+            height: 100%;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+            color: #111;
+            margin: 0;
+        }
+
+        .sheet {
+            box-sizing: border-box;
+            width: 100%;
+            max-width: 794px;
+            margin: 0 auto;
+            padding: 10mm 12mm;
+        }
+
+        h1 {
+            font-size: 20px;
+            margin: 0 0 6px 0
+        }
+
+        h2 {
+            font-size: 14px;
+            margin: 10px 0 6px 0
+        }
+
+        p {
+            margin: 6px 0;
+            font-size: 12px
+        }
+
+        ul {
+            margin: 6px 0 6px 18px;
+            font-size: 12px
+        }
+
+        li {
+            margin-bottom: 4px
+        }
+
+        .row {
+            display: flex;
+            gap: 12px
+        }
+
+        .col {
+            flex: 1
+        }
+
+        .muted {
+            color: #555;
+            font-size: 11.5px
+        }
+
+        .small {
+            font-size: 11px
+        }
+
+        .kbd {
+            background: #f1f1f1;
+            border: 1px solid #ddd;
+            border-bottom-width: 2px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 11px
+        }
+
+        .footer {
+            position: relative;
+            margin-top: 10px;
+            border-top: 1px solid #ddd;
+            padding-top: 8px;
+            font-size: 11px;
+            color: #444
+        }
+
+        /* Make sure it fits on one page: reduce spacing */
+        .compact {
+            line-height: 1.15
+        }
+
+        /* Hide elements that should not print (links, buttons) */
+        a {
+            color: inherit;
+            text-decoration: none
+        }
+
+        @media print {
+            body {
+                background: white
+            }
+
+            .sheet {
+                box-shadow: none
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="sheet compact">
+        <h1>Family Chores — Quick Reference</h1>
+        <div class="muted">One-page printable guide: dashboard, creating chores, reading analytics, and quick
+            troubleshooting.</div>
+
+        <h2>Quick Start (3 steps)</h2>
+        <ul>
+            <li><strong>Add family members:</strong> Click "➕ Add Member" — name, color, optional avatar.</li>
+            <li><strong>Create a chore:</strong> Use the Add Chore control in a member column — set title, difficulty,
+                assignee, and schedule.</li>
+            <li><strong>Mark complete & reward:</strong> Tap a chore to complete it and award stars; view rewards in "🎁
+                Reward Store".</li>
+        </ul>
+
+        <h2>Dashboard Overview</h2>
+        <div class="row">
+            <div class="col">
+                <p><strong>Board View:</strong> Kanban layout with columns per member or time block. Drag & drop to
+                    reorder and reprioritise.</p>
+                <p><strong>Chore cards:</strong> Title, optional emoji/notes, difficulty, and owner. Tap a card for
+                    details (edit, change assignee, set recurrence, add photo).</p>
+            </div>
+            <div class="col">
+                <p><strong>Sidebar & tools:</strong> Use sidebar buttons — <span class="small">📅 Calendar</span>, <span
+                        class="small">📊 Weekly Summary</span>, <span class="small">📈 Progress Chart</span>, and <span
+                        class="small">🎁 Reward Store</span>.</p>
+                <p class="small"><strong>Top widgets:</strong> Weather, date/time, and quick actions live above the
+                    board.</p>
+            </div>
+        </div>
+
+        <h2>Creating & Scheduling Chores</h2>
+        <ul>
+            <li><strong>Name & details:</strong> Enter a clear title and short notes so members know what to do.</li>
+            <li><strong>Difficulty:</strong> Easy / Medium / Hard — determines stars awarded when completed.</li>
+            <li><strong>Assign & schedule:</strong> Pick a member, choose a date or set recurrence (daily/weekly or
+                advanced RRULE).</li>
+            <li><strong>One-off vs recurring:</strong> One-off tasks use a single date; recurring chores appear on
+                future dates in the calendar.</li>
+        </ul>
+
+        <h2>Analytics & What You’re Seeing</h2>
+        <p class="small"><strong>Completion metrics:</strong> Counts of chores finished in the selected period
+            (day/week/month).</p>
+        <p class="small"><strong>Completion rate:</strong> Percentage of assigned chores completed — useful to spot who
+            needs reminders or new incentives.</p>
+        <p class="small"><strong>Stars & Rewards:</strong> Stars are currency earned for completing chores (based on
+            difficulty). Redeem in the Reward Store; redeemed items and balances are tracked.</p>
+        <p class="small"><strong>Progress chart:</strong> X axis = time, Y axis = chores/stars. Look for trends (rising
+            = improvement, drops = areas to discuss).</p>
+
+        <h2>Common Actions (cheat sheet)</h2>
+        <ul>
+            <li><span class="kbd">Drag</span> a card to reorder it.</li>
+            <li>Open a card → edit details, change assignee, or set recurrence.</li>
+            <li>Use <strong>Weekly Summary</strong> to export CSV; use Calendar to export iCal.</li>
+            <li>Use Photo Proof to attach evidence if needed.</li>
+        </ul>
+
+        <h2>Troubleshooting</h2>
+        <ul>
+            <li><strong>Chore didn’t repeat:</strong> Check recurrence settings and device date/time.</li>
+            <li><strong>Charts not updating:</strong> Close and reopen the chart modal or refresh the page.</li>
+            <li><strong>Cloud sync:</strong> Sign in and verify email to enable Firestore snapshots (cloud writes
+                require email verification).</li>
+        </ul>
+
+        <div class="footer">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <div>
+                    <strong>Tips:</strong> Keep chore titles short, use emojis for younger kids, and set clear rewards
+                    to motivate.
+                </div>
+                <div style="text-align:right">
+                    <div class="small">Built by Rizqwave Technologies</div>
+                    <div class="small">Open this file in your browser and print (Ctrl/Cmd+P → Save as PDF)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

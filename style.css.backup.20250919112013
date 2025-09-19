@@ -415,6 +415,270 @@ body.sidebar-open .kanban-board {
   border: 2px dashed #aaa;
 }
 
+/* -------------------- Responsive additions (mobile-first) -------------------- */
+/* Base adjustments for predictable sizing */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:root {
+  --gap-sm: 8px;
+  --gap-md: 12px;
+  --gap-lg: 18px;
+  --card-radius: 12px;
+  --touch-size: 44px;
+  /* recommended minimum touch area */
+  font-size: 16px;
+}
+
+img,
+svg,
+.avatar,
+.avatar-preview,
+.title-avatar {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+button,
+input[type="button"],
+input[type="submit"],
+select,
+textarea {
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.06);
+  min-height: var(--touch-size);
+  min-width: var(--touch-size);
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
+.popup-content,
+.modal .modal-content {
+  width: calc(100% - 32px);
+  max-width: 720px;
+  margin: 0 auto;
+  border-radius: var(--card-radius);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+}
+
+#kanban {
+  display: grid;
+  grid-template-columns: 1fr;
+  /* mobile: stacked columns */
+  gap: var(--gap-md);
+  align-items: start;
+  padding: var(--gap-md);
+}
+
+#kanban .column {
+  margin: 0;
+  padding: 12px;
+  border-radius: 10px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
+  overflow: visible;
+}
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tab-button {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  font-size: 0.95rem;
+  border-radius: 8px;
+}
+
+.chore-list {
+  max-height: 40vh;
+  overflow: auto;
+  padding: 6px 4px;
+  gap: 6px;
+}
+
+.popup-overlay {
+  padding: 12px;
+}
+
+.popup-content {
+  max-height: 86vh;
+  overflow-y: auto;
+}
+
+.add-chore-btn,
+.edit-chore-btn,
+.delete-member-btn,
+.quick-action-btn {
+  min-width: var(--touch-size);
+  min-height: var(--touch-size);
+  padding: 0.4rem 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -ms-text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+@media (min-width: 600px) {
+  :root {
+    font-size: 16px;
+  }
+
+  #kanban {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--gap-lg);
+  }
+
+  .chore-list {
+    max-height: 50vh;
+  }
+}
+
+@media (min-width: 768px) {
+  :root {
+    font-size: 16.5px;
+  }
+
+  #kanban {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 18px;
+    padding: 18px;
+  }
+
+  .tabs {
+    gap: 10px;
+  }
+
+  .tab-button {
+    padding: 10px 12px;
+    font-size: 1rem;
+  }
+
+  .chore-list {
+    max-height: 60vh;
+  }
+
+  .popup-content {
+    width: calc(100% - 64px);
+    max-width: 920px;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    font-size: 18px;
+    --gap-lg: 22px;
+  }
+
+  #kanban {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 22px;
+    padding: 22px;
+  }
+
+  .popup-content {
+    max-width: 1100px;
+  }
+
+  .chore-list {
+    max-height: 70vh;
+  }
+}
+
+:focus {
+  outline: 3px solid rgba(66, 133, 244, 0.18);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+canvas {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+.member-name,
+.chore-text,
+.badge-info,
+.goal-header h4 {
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+@media (max-width: 420px) {
+
+  body.weather-animation,
+  .weather-animation {
+    display: none !important;
+  }
+}
+
+/* -------------------- End responsive additions -------------------- */
+
+/* Mobile-specific tweaks to fix header overlap and kanban column sizing */
+@media (max-width: 480px) {
+  #pageTitle {
+    margin-top: 3.5rem;
+  }
+
+  #titleAvatar {
+    width: 72px !important;
+    height: 72px !important;
+    font-size: 2.2rem !important;
+  }
+
+  #pageTitle h1 {
+    font-size: 2.2rem !important;
+    text-align: center;
+  }
+
+  #kanban {
+    padding: 8px;
+    grid-template-columns: 1fr !important;
+  }
+
+  .column {
+    min-width: auto !important;
+    max-width: 100% !important;
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  .floating-logout-btn {
+    right: 16px;
+    bottom: 80px;
+  }
+
+  /* Reposition Daily Logs button (inserted top-right by script) */
+  #dailyLogsBtn,
+  .daily-logs-btn {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 10010;
+    border-radius: 8px;
+    padding: 10px 14px;
+  }
+
+  /* Make popup buttons and inputs slightly larger for touch */
+  .popup-content input,
+  .popup-content button {
+    font-size: 1rem;
+  }
+}
+
 .chore {
   margin-bottom: 0.75rem;
   padding: 1rem;
@@ -641,40 +905,6 @@ body.sidebar-open .kanban-board {
   overflow: auto;
   max-height: calc(100vh - 220px);
   padding-right: 8px;
-}
-
-/* App Info specific: make content scrollable and add spacing for scroll controls */
-#appInfoContent {
-  overflow-y: auto;
-  max-height: calc(70vh);
-  padding-right: 8px;
-  margin-top: 0.5rem;
-}
-
-.popup-scroll-btn {
-  background: linear-gradient(135deg, #4a90e2, #357abd);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 6px 10px;
-  cursor: pointer;
-  font-weight: 700;
-  box-shadow: 0 6px 18px rgba(74, 144, 226, 0.18);
-}
-
-.popup-scroll-btn:hover {
-  transform: translateY(-2px);
-}
-
-/* Smaller on mobile */
-@media (max-width: 600px) {
-  #appInfoContent {
-    max-height: calc(60vh);
-  }
-
-  .popup-scroll-btn {
-    padding: 6px 8px;
-  }
 }
 
 /* Calendar specific: keep calendar content scrollable horizontally inside modal */
@@ -2372,4 +2602,15 @@ body.dark-theme .weekly-summary-table tr:hover {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+/* Small-screen override: move Daily Logs button above the bottom button bar to avoid header overlap */
+@media (max-width: 380px) {
+
+  #dailyLogsBtn,
+  .daily-logs-btn {
+    top: auto !important;
+    bottom: 96px !important;
+    right: 12px !important;
+  }
 }

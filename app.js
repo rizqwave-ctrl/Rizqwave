@@ -75,16 +75,87 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 
+// --- Premium access whitelist (client-side) ---
+// Lightweight whitelist to allow you and friends to receive premium features
+// without any Firestore lookups. Update the `emails` array with the
+// authenticated emails of the users who should receive free premium access.
+// Optionally add UIDs to `uids` if you prefer to match by UID (more stable).
+// WARNING: This is a client-side whitelist for convenience and cost-control.
+// Do NOT rely on this for strong security-sensitive features. For stronger
+// guarantees you would need to set custom claims via a secure server process.
+const PREMIUM_WHITELIST = {
+  emails: [
+    // Example: replace with your email(s)
+    "your.email@example.com",
+    "friend1@example.com"
+  ],
+  uids: [
+    // Optional: add Firebase Auth UIDs here
+  ]
+};
+
+// Global premium flag cached in localStorage to avoid repeated checks.
+window.isPremium = (localStorage.getItem('isPremium') === 'true');
+
+/**
+ * Determine if the signed-in user should have premium access without
+ * performing any Firestore reads. This checks the local whitelist and
+ * updates a cached value in localStorage to minimize future work.
+ */
+function setPremiumForUser(user) {
+  if (!user) {
+    window.isPremium = false;
+    localStorage.removeItem('isPremium');
+    return false;
+  }
+
+  const email = (user.email || '').toLowerCase();
+  const uid = user.uid || '';
+
+  const matchedByEmail = PREMIUM_WHITELIST.emails
+    .map(e => e.toLowerCase())
+    .includes(email);
+  const matchedByUid = PREMIUM_WHITELIST.uids.includes(uid);
+
+  const isPremiumNow = matchedByEmail || matchedByUid;
+  window.isPremium = !!isPremiumNow;
+  if (isPremiumNow) {
+    localStorage.setItem('isPremium', 'true');
+  } else {
+    localStorage.removeItem('isPremium');
+  }
+
+  return isPremiumNow;
+}
+
+// Reduce Authentication calls by persisting state locally.
+// This reduces re-auth attempts and keeps token refreshes managed by the SDK.
+try {
+  firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch((err) => {
+    console.warn('Could not set auth persistence:', err && err.message);
+  });
+} catch (e) {
+  // In some environments the Persistence enum may not be available; ignore safely.
+  console.warn('Auth persistence configuration skipped:', e && e.message);
+}
+
+// If a user was already flagged premium in a previous session, keep that
+// flag until the next successful auth state change. This avoids any Firestore
+// round trips during app init just to decide premium behavior.
+if (window.isPremium) {
+  console.info('Premium flag loaded from cache (localStorage).');
+}
+
 // Add this after Firebase initialization
 // Subscription Service Class
 class SubscriptionService {
   constructor() {
     this.stripe = Stripe('pk_test_51S34YeDgO4wxmFqL91o4JIGCCWr9rYXpKykW74XdG8mv4a7Dg34iCzQAWfjZ745mjbtCnXGn6a3CFlB02DOySYpi00pi9v5RBc'); // Replace with your actual publishable key
     //this.vercelBaseUrl = 'https://chores-payments-nb9ikc9dx-mohammed-rasheed-khans-projects.vercel.app';
-  this.vercelBaseUrl = 'https://chores-payments.vercel.app';
- }
-  
-async checkUserSubscription() {
+    this.vercelBaseUrl = 'https://chores-payments.vercel.app';
+  }
+
+  async checkUserSubscription() {
     const user = firebase.auth().currentUser;
     if (!user) return { isPremium: false, status: 'none', customerId: null };
 
@@ -92,7 +163,7 @@ async checkUserSubscription() {
       // Get updated token with custom claims
       await user.getIdToken(true);
       const { claims } = await user.getIdTokenResult();
-      
+
       return {
         isPremium: claims.isPremium || false,
         status: claims.subscriptionStatus || 'none',
@@ -103,7 +174,7 @@ async checkUserSubscription() {
       return { isPremium: false, status: 'none', customerId: null };
     }
   }
-  
+
   async createCustomer(user) {
     try {
       const response = await fetch(`${this.vercelBaseUrl}/api/create-customer`, {
@@ -152,7 +223,7 @@ async checkUserSubscription() {
       }
 
       const { url } = await response.json();
-      
+
       // Redirect to Stripe Checkout
       window.location.href = url;
     } catch (error) {
@@ -161,7 +232,7 @@ async checkUserSubscription() {
     }
   }
 
-  
+
 }
 
 // Initialize the subscription service
@@ -192,7 +263,7 @@ function showAppContent(isLoggedIn) {
       logoutBtn.classList.add("floating-logout-btn");
     }
   } else {
-          console.log("morning error 1");
+    console.log("morning error 1");
 
     loginOverlay.style.display = "flex";
     mainAppContent.style.display = "none";
@@ -206,8 +277,8 @@ function showAppContent(isLoggedIn) {
       logoutBtn.style.display = "none";
       logoutBtn.classList.add("floating-logout-btn");
     }
-    
-          console.log("morning error 2");
+
+    console.log("morning error 2");
   }
 }
 
@@ -283,12 +354,12 @@ let signUpInProgress = false;
 // Sign up with email/password
 async function signUpWithEmail(e) {
   if (e && e.preventDefault) e.preventDefault();
-  const displayName = (document.getElementById('signupDisplayName')||{}).value || '';
-  const email = (document.getElementById('signupEmail')||{}).value || '';
-  const password = (document.getElementById('signupPassword')||{}).value || '';
+  const displayName = (document.getElementById('signupDisplayName') || {}).value || '';
+  const email = (document.getElementById('signupEmail') || {}).value || '';
+  const password = (document.getElementById('signupPassword') || {}).value || '';
 
   // Trace entry for debugging in production
-  try { console.log('signUpWithEmail entered for', email); console.trace(); } catch (e2) {}
+  try { console.log('signUpWithEmail entered for', email); console.trace(); } catch (e2) { }
 
   // Basic validation
   if (!displayName.trim()) return showAuthMessage('Please enter a display name');
@@ -325,25 +396,25 @@ async function signUpWithEmail(e) {
       return;
     }
 
-  // Final double-check: re-query sign-in methods right before creating the account
-  try {
-    const finalMethods = await auth.fetchSignInMethodsForEmail(email);
-    if (finalMethods && finalMethods.length > 0) {
-      // Another process registered this email while the user was filling the form.
-      const loginEl = document.getElementById('loginEmail');
-      if (loginEl) loginEl.value = email;
-      showAuthMessage('This email was just registered. Please sign in instead.', 'error');
-      showLoginUI();
-      return;
+    // Final double-check: re-query sign-in methods right before creating the account
+    try {
+      const finalMethods = await auth.fetchSignInMethodsForEmail(email);
+      if (finalMethods && finalMethods.length > 0) {
+        // Another process registered this email while the user was filling the form.
+        const loginEl = document.getElementById('loginEmail');
+        if (loginEl) loginEl.value = email;
+        showAuthMessage('This email was just registered. Please sign in instead.', 'error');
+        showLoginUI();
+        return;
+      }
+    } catch (finalErr) {
+      // If the final check fails, log it but continue to attempt create (we'll still catch errors)
+      console.warn('final fetchSignInMethodsForEmail failed', finalErr);
     }
-  } catch (finalErr) {
-    // If the final check fails, log it but continue to attempt create (we'll still catch errors)
-    console.warn('final fetchSignInMethodsForEmail failed', finalErr);
-  }
 
-  // Log before creating the user (always) so we can see stack in production
-  try { console.log('About to call createUserWithEmailAndPassword for', email); console.trace(); } catch (e2) {}
-  const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+    // Log before creating the user (always) so we can see stack in production
+    try { console.log('About to call createUserWithEmailAndPassword for', email); console.trace(); } catch (e2) { }
+    const userCredential = await auth.createUserWithEmailAndPassword(email, password);
     const user = userCredential.user;
 
     // Update display name
@@ -369,11 +440,11 @@ async function signUpWithEmail(e) {
       console.log('sendEmailVerification succeeded for', user.email);
       showAuthMessage('Account created. A verification link has been sent to your email. Please click it to verify, then sign in.', 'success');
       // Show resend UI in case the email was not received
-      try { document.getElementById('resendVerificationArea').style.display = ''; } catch (e) {}
+      try { document.getElementById('resendVerificationArea').style.display = ''; } catch (e) { }
     } catch (e) {
       console.warn('sendEmailVerification failed', e);
       showAuthMessage('Account created. Please verify your email. If you did not receive an email, use Resend below.', 'success');
-      try { document.getElementById('resendVerificationArea').style.display = ''; } catch (e) {}
+      try { document.getElementById('resendVerificationArea').style.display = ''; } catch (e) { }
     }
 
     // Sign out unverified user and show login UI
@@ -385,7 +456,7 @@ async function signUpWithEmail(e) {
     // Handle common Firebase error codes
     if (err && err.code === 'auth/email-already-in-use') {
       // Prefill login email and switch UI to login
-      try { localStorage.setItem('pendingVerificationEmail', email); } catch (e) {}
+      try { localStorage.setItem('pendingVerificationEmail', email); } catch (e) { }
       const loginEl = document.getElementById('loginEmail');
       if (loginEl) loginEl.value = email;
       showAuthMessage('This email is already registered. Please sign in instead.', 'error');
@@ -403,8 +474,8 @@ async function signUpWithEmail(e) {
 }
 async function signInWithEmail(e) {
   if (e && e.preventDefault) e.preventDefault();
-  const email = (document.getElementById('loginEmail')||{}).value || '';
-  const password = (document.getElementById('loginPassword')||{}).value || '';
+  const email = (document.getElementById('loginEmail') || {}).value || '';
+  const password = (document.getElementById('loginPassword') || {}).value || '';
 
   if (!email || !email.includes('@')) return showAuthMessage('Please enter a valid email');
   if (!password) return showAuthMessage('Please enter your password');
@@ -575,6 +646,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   } catch (e) { console.warn('Merged init failed', e); }
 });
+
+// DOM-ready fallback: if auth state fired before the sidebar element existed,
+// try to populate `#loggedInUser` when the DOM is ready using currentUser
+// or previously stored pending display name.
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    const el = document.getElementById('loggedInUser');
+    if (!el) return;
+    // Prefer live Firebase user if available
+    const live = (firebase && firebase.auth) ? firebase.auth().currentUser : null;
+    if (live) {
+      el.textContent = live.displayName || live.email || live.uid || '';
+      return;
+    }
+    // Fallback to any pending display name saved during signup/verification
+    const pending = localStorage.getItem('pendingDisplayName') || localStorage.getItem('signupDisplayName') || '';
+    if (pending) el.textContent = pending;
+  } catch (e) { console.warn('DOMContentLoaded fallback for loggedInUser failed', e); }
+});
 function handleLogin(event) {
   console.log("handleLogin function called");
 
@@ -736,7 +826,7 @@ async function checkForRecentVerification() {
 // Resend verification helper: prompts for password and resends verification link.
 async function handleResendVerification() {
   try {
-    const pendingEmail = localStorage.getItem('pendingVerificationEmail') || (document.getElementById('signupEmail')||{}).value;
+    const pendingEmail = localStorage.getItem('pendingVerificationEmail') || (document.getElementById('signupEmail') || {}).value;
     if (!pendingEmail) return showAuthMessage('No email available to resend verification to.', 'error');
 
     // Prompt user to enter their password so we can sign them in temporarily to call sendEmailVerification
@@ -810,22 +900,41 @@ function showVerificationBanner(email) {
 auth.onAuthStateChanged(async user => {
   if (user) {
     console.log("User logged in:", user.uid);
+    try {
+      const loggedEl = document.getElementById('loggedInUser');
+      if (loggedEl) loggedEl.textContent = user.displayName || user.email || user.uid;
+    } catch (e) { console.warn('Could not write loggedInUser element', e); }
+
     // If Firebase says the email is not verified, treat as unverified
     if (!user.emailVerified) {
       console.log('Email not verified for', user.email);
-      await auth.signOut();
+      await firebase.auth().signOut();
       localStorage.setItem('pendingVerificationEmail', user.email || '');
       window.location.href = '/verify.html?email=' + encodeURIComponent(user.email || '');
       return;
     }
 
-    // Also check Firestore 'users' doc for server-side verified flag (in case backend code verifies)
+    // Use client-side whitelist caching to decide premium access and avoid
+    // unnecessary Firestore reads which would count against free-tier quotas.
+    const isPremiumLocal = setPremiumForUser(user);
+    if (isPremiumLocal) {
+      console.info('Premium access granted from client whitelist — skipping Firestore reads.');
+      // For whitelisted users, prefer localStorage snapshot to avoid reading
+      // user documents from Firestore. If no local data exists, fall back to
+      // a minimal read (optional). Here we avoid reads entirely to limit quota.
+      renderBoard();
+      showAppContent(true);
+      return;
+    }
+
+    // Non-whitelisted users: perform a minimal verification check against
+    // Firestore user doc. This is only executed when necessary to reduce reads.
     try {
       const doc = await db.collection('users').doc(user.uid).get();
       const data = doc.exists ? doc.data() : null;
       if (data && data.verified === false) {
         console.log('User record not verified yet');
-        await auth.signOut();
+        await firebase.auth().signOut();
         localStorage.setItem('pendingVerificationEmail', user.email || '');
         window.location.href = '/verify.html?email=' + encodeURIComponent(user.email || '');
         return;
@@ -835,13 +944,17 @@ auth.onAuthStateChanged(async user => {
       // fall through; prefer to let Firebase emailVerified gate access
     }
 
-    // Reset local state and load data
+    // Reset local state and load data for non-whitelisted users
     await loadDataFromFirestore();
     renderBoard();
     showAppContent(true);
   } else {
     console.log("User is not logged in.");
     // Reset local state when no user is logged in
+    try {
+      const loggedEl = document.getElementById('loggedInUser');
+      if (loggedEl) loggedEl.textContent = '';
+    } catch (e) { console.warn('Could not clear loggedInUser element', e); }
     resetLocalState();
     renderBoard();
     showAppContent(false);
@@ -852,7 +965,7 @@ auth.onAuthStateChanged(async user => {
 if (window.location.pathname === '/success' || window.location.search.includes('session_id')) {
   const urlParams = new URLSearchParams(window.location.search);
   const sessionId = urlParams.get('session_id');
-  
+
   if (sessionId) {
     // Wait a moment for webhook to process
     setTimeout(async () => {
@@ -904,18 +1017,18 @@ function initData() {
   family.forEach((member) => {
     if (!activeTabs[member.name]) {
       console.log("setting morning as active tab for member 1");
-    activeTabs[member.name] = "Morning"; // default initial tab per member
-          console.log("setting morning as active tab for member 2");
+      activeTabs[member.name] = "Morning"; // default initial tab per member
+      console.log("setting morning as active tab for member 2");
 
-  }
+    }
     if (!choreData[member.name]) {
-            console.log("setting morning as active tab for member 3");
+      console.log("setting morning as active tab for member 3");
 
       choreData[member.name] = {
-  Morning: [...defaultChoresByTime.Morning],
-  Afternoon: [...defaultChoresByTime.Afternoon],
-  Evening: [...defaultChoresByTime.Evening],
-};
+        Morning: [...defaultChoresByTime.Morning],
+        Afternoon: [...defaultChoresByTime.Afternoon],
+        Evening: [...defaultChoresByTime.Evening],
+      };
       console.log("setting morning as active tab for member 4");
 
     }
@@ -958,7 +1071,7 @@ function getStartOfWeek(offset = 0) {
   const day = now.getDay();
   const diff = now.getDate() - day + (day === 0 ? -6 : 1); // Monday as start
   const start = new Date(now.setDate(diff));
-  start.setHours(0,0,0,0);
+  start.setHours(0, 0, 0, 0);
   if (offset !== 0) start.setDate(start.getDate() + offset * 7);
   return start;
 }
@@ -995,7 +1108,7 @@ function renderCalendar() {
     family.forEach(member => {
       const secs = choreData[member.name] || {};
       Object.keys(secs).forEach(sec => {
-        (secs[sec]||[]).forEach(c => {
+        (secs[sec] || []).forEach(c => {
           const choreObj = typeof c === 'string' ? { title: c } : c;
           const occurs = choreObj.recurrence ? matchesRecurrence(choreObj.recurrence, d) : false;
           const createdAt = choreObj.createdAt ? new Date(choreObj.createdAt).toISOString().split('T')[0] : null;
@@ -1003,9 +1116,9 @@ function renderCalendar() {
           if (occurs || assigned || createdAt === dayKey) {
             const pill = document.createElement('div');
             pill.className = 'event-pill';
-            const base = (family.find(f=>f.name===member.name)||{color:'#4a90e2'}).color;
-            pill.style.background = `linear-gradient(135deg, ${base}, ${shadeColor(base,-8)})`;
-            pill.style.border = `1px solid ${shadeColor(base,-12)}`;
+            const base = (family.find(f => f.name === member.name) || { color: '#4a90e2' }).color;
+            pill.style.background = `linear-gradient(135deg, ${base}, ${shadeColor(base, -8)})`;
+            pill.style.border = `1px solid ${shadeColor(base, -12)}`;
             pill.textContent = `${choreObj.title || choreObj.name || 'Chore'} — ${member.name}`;
             itemsWrap.appendChild(pill);
           }
@@ -1056,7 +1169,7 @@ function exportWeekICal() {
   events.forEach(ev => {
     ical += 'BEGIN:VEVENT\n';
     ical += `UID:${ev.uid}\n`;
-    ical += `DTSTAMP:${new Date().toISOString().replace(/[-:]/g,'').split('.')[0]}Z\n`;
+    ical += `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z\n`;
     if (ev.rrule) {
       // Use DTSTART from first occurrence or given date
       ical += `DTSTART:${ev.date}T000000Z\n`;
@@ -1074,7 +1187,7 @@ function exportWeekICal() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `familychore-week-${(new Date()).toISOString().slice(0,10)}.ics`;
+  a.download = `familychore-week-${(new Date()).toISOString().slice(0, 10)}.ics`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -1123,7 +1236,7 @@ function toggleCalendarView() {
 function getStartOfMonth(offset = 0) {
   const now = new Date();
   const first = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-  first.setHours(0,0,0,0);
+  first.setHours(0, 0, 0, 0);
   return first;
 }
 
@@ -1159,14 +1272,14 @@ function renderMonth(transition) {
 
   const header = document.createElement('div');
   header.className = 'calendar-header';
-  header.innerHTML = `<div><strong>${start.toLocaleString(undefined,{month:'long'})} ${year}</strong></div><div></div>`;
+  header.innerHTML = `<div><strong>${start.toLocaleString(undefined, { month: 'long' })} ${year}</strong></div><div></div>`;
   panel.appendChild(header);
 
   const table = document.createElement('table');
   table.className = 'calendar-grid';
   const thead = document.createElement('thead');
   const trh = document.createElement('tr');
-  ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(dow => {
+  ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].forEach(dow => {
     const th = document.createElement('th'); th.textContent = dow; trh.appendChild(th);
   });
   thead.appendChild(trh);
@@ -1176,7 +1289,7 @@ function renderMonth(transition) {
   for (let r = 0; r < 6; r++) {
     const tr = document.createElement('tr');
     for (let c = 0; c < 7; c++) {
-      const idx = r*7 + c;
+      const idx = r * 7 + c;
       const day = cells[idx];
       const td = document.createElement('td');
       td.className = 'calendar-cell';
@@ -1196,13 +1309,13 @@ function renderMonth(transition) {
       td.appendChild(quick);
 
       // Fill events for this day
-  const itemsWrap = document.createElement('div'); itemsWrap.style.display = 'flex'; itemsWrap.style.flexDirection = 'column'; itemsWrap.style.gap = '6px'; itemsWrap.style.marginTop = '6px';
-  const dayKey = day.toISOString().split('T')[0];
-  const items = [];
+      const itemsWrap = document.createElement('div'); itemsWrap.style.display = 'flex'; itemsWrap.style.flexDirection = 'column'; itemsWrap.style.gap = '6px'; itemsWrap.style.marginTop = '6px';
+      const dayKey = day.toISOString().split('T')[0];
+      const items = [];
       family.forEach(member => {
         const secs = choreData[member.name] || {};
         Object.keys(secs).forEach(sec => {
-          (secs[sec]||[]).forEach(c => {
+          (secs[sec] || []).forEach(c => {
             const choreObj = typeof c === 'string' ? { title: c } : c;
             const occurs = choreObj.recurrence ? matchesRecurrence(choreObj.recurrence, day) : false;
             const createdAt = choreObj.createdAt ? new Date(choreObj.createdAt).toISOString().split('T')[0] : null;
@@ -1366,8 +1479,8 @@ function ensureQuickActionModal() {
 
   // Wire buttons
   modal.querySelector('#qamCancel').addEventListener('click', () => { closeQuickActionModal(); });
-  modal.querySelector('#qamDelete').addEventListener('click', () => { try { performQuickDelete(); } catch(e){ console.warn('performQuickDelete failed', e); alert('Could not delete. See console for details.'); } });
-  modal.querySelector('#qamSave').addEventListener('click', () => { try { performQuickSave(); } catch(e){ console.warn('performQuickSave failed', e); alert('Could not save. See console for details.'); } });
+  modal.querySelector('#qamDelete').addEventListener('click', () => { try { performQuickDelete(); } catch (e) { console.warn('performQuickDelete failed', e); alert('Could not delete. See console for details.'); } });
+  modal.querySelector('#qamSave').addEventListener('click', () => { try { performQuickSave(); } catch (e) { console.warn('performQuickSave failed', e); alert('Could not save. See console for details.'); } });
 
   // Weekday buttons toggle + show/hide RRULE input
   modal.querySelectorAll('.weekday').forEach(b => b.addEventListener('click', (ev) => {
@@ -1400,15 +1513,15 @@ function ensureQuickActionModal() {
       if (ev.key === 'Tab') {
         const focusable = modal.querySelectorAll('button, [href], input, select, textarea');
         if (!focusable || focusable.length === 0) return;
-        const first = focusable[0]; const last = focusable[focusable.length -1];
+        const first = focusable[0]; const last = focusable[focusable.length - 1];
         if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
         else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus(); }
       }
     } catch (e) { console.warn('modal key handler error', e); }
   });
   // expose helper to show/hide reliably
-  modal._show = function() { modal.classList.remove('hidden'); modal.style.display = 'flex'; };
-  modal._hide = function() { modal.classList.add('hidden'); modal.style.display = 'none'; };
+  modal._show = function () { modal.classList.remove('hidden'); modal.style.display = 'flex'; };
+  modal._hide = function () { modal.classList.add('hidden'); modal.style.display = 'none'; };
 }
 
 let __qamState = null; // { date, member, section, originalIndex }
@@ -1416,7 +1529,7 @@ let __qamState = null; // { date, member, section, originalIndex }
 function openAddChoreForDate(date) {
   ensureQuickActionModal();
   const modal = document.getElementById('quickActionModal');
-  try { modal._show(); } catch(e) { modal.classList.remove('hidden'); }
+  try { modal._show(); } catch (e) { modal.classList.remove('hidden'); }
   document.getElementById('qamTitle').textContent = 'Add Chore';
   document.getElementById('qamDate').textContent = date.toDateString();
   // populate members
@@ -1435,7 +1548,7 @@ function openEditChoresForDate(date) {
   family.forEach(m => {
     const secs = choreData[m.name] || {};
     Object.keys(secs).forEach(sec => {
-      (secs[sec]||[]).forEach((c, idx) => {
+      (secs[sec] || []).forEach((c, idx) => {
         const choreObj = (typeof c === 'string') ? { title: c } : c;
         const occurs = choreObj.recurrence ? matchesRecurrence(choreObj.recurrence, date) : false;
         const createdAt = choreObj.createdAt ? new Date(choreObj.createdAt).toISOString().split('T')[0] : null;
@@ -1447,7 +1560,7 @@ function openEditChoresForDate(date) {
   if (items.length === 0) return alert('No editable chores found for ' + date.toDateString());
   ensureQuickActionModal();
   const modal = document.getElementById('quickActionModal');
-  try { modal._show(); } catch(e) { modal.classList.remove('hidden'); }
+  try { modal._show(); } catch (e) { modal.classList.remove('hidden'); }
   document.getElementById('qamTitle').textContent = 'Edit Chore';
   document.getElementById('qamDate').textContent = date.toDateString();
   const sel = document.getElementById('qamMember'); sel.innerHTML = '';
@@ -1484,8 +1597,8 @@ function openEditChoresForDate(date) {
           document.querySelector('input[name="qamRecType"][value="weekly"]').checked = true;
           modal.querySelectorAll('#qamWeekdays .weekday').forEach(b => b.classList.remove('active-weekday'));
           // stored.recurrence.daysOfWeek may be 1..7 (Mon=1..Sun=7) or 0..6 (Sun=0..Sat=6)
-          (stored.recurrence.daysOfWeek||[]).forEach(dRaw => {
-            let d = parseInt(dRaw,10);
+          (stored.recurrence.daysOfWeek || []).forEach(dRaw => {
+            let d = parseInt(dRaw, 10);
             if (isNaN(d)) return;
             if (d > 6) d = d % 7; // convert 7 -> 0 (Sunday)
             // Try to match either data-day format (some modals use 0..6, some 1..7)
@@ -1521,42 +1634,42 @@ function openDeleteChoresForDate(date) {
 function closeQuickActionModal() {
   const modal = document.getElementById('quickActionModal');
   if (!modal) return;
-  try { modal._hide(); } catch(e) { modal.classList.add('hidden'); }
+  try { modal._hide(); } catch (e) { modal.classList.add('hidden'); }
   __qamState = null;
 }
 
 function performQuickSave() {
   try {
     if (!__qamState) return closeQuickActionModal();
-    const title = (document.getElementById('qamTitleInput')||{}).value.trim();
-    const member = (document.getElementById('qamMember')||{}).value;
-    const section = (document.getElementById('qamSection')||{}).value;
+    const title = (document.getElementById('qamTitleInput') || {}).value.trim();
+    const member = (document.getElementById('qamMember') || {}).value;
+    const section = (document.getElementById('qamSection') || {}).value;
     if (!title) return alert('Enter a chore title');
     choreData[member] = choreData[member] || { Morning: [], Afternoon: [], Evening: [] };
 
     // read recurrence type and weekday recurrence selection
-    const recType = (document.querySelector('input[name="qamRecType"]:checked')||{}).value || 'none';
-  const weekdayBtns = Array.from(document.querySelectorAll('#qamWeekdays .weekday'));
-  // dataset day can be 0..6 (Sun..Sat) or 1..7 (Mon..Sun) depending on modal version; normalize to 0..6
-  const daysOfWeekRaw = weekdayBtns.filter(b => b.classList.contains('active-weekday')).map(b => parseInt(b.dataset.day,10));
-  const daysOfWeek = daysOfWeekRaw.map(d => (isNaN(d) ? null : (d > 6 ? d % 7 : d))).filter(d => d !== null);
+    const recType = (document.querySelector('input[name="qamRecType"]:checked') || {}).value || 'none';
+    const weekdayBtns = Array.from(document.querySelectorAll('#qamWeekdays .weekday'));
+    // dataset day can be 0..6 (Sun..Sat) or 1..7 (Mon..Sun) depending on modal version; normalize to 0..6
+    const daysOfWeekRaw = weekdayBtns.filter(b => b.classList.contains('active-weekday')).map(b => parseInt(b.dataset.day, 10));
+    const daysOfWeek = daysOfWeekRaw.map(d => (isNaN(d) ? null : (d > 6 ? d % 7 : d))).filter(d => d !== null);
     let recurrence = null;
-    if (recType === 'weekly' && daysOfWeek && daysOfWeek.length>0) {
+    if (recType === 'weekly' && daysOfWeek && daysOfWeek.length > 0) {
       // convert JS weekday 0..6 (Sun..Sat) to BYDAY tokens (MO,TU etc.) and 1..7 Monday-based days for matchesRecurrence
-  const bydayMap = ['SU','MO','TU','WE','TH','FR','SA'];
-  const byday = daysOfWeek.map(d => bydayMap[d]).join(',');
-  // Build simple RRULE and also keep daysOfWeek as array 1..7 where Monday=1 for matchesRecurrence
-  const dowForMatch = daysOfWeek.map(d => (d === 0 ? 7 : d));
-  recurrence = { daysOfWeek: dowForMatch, rrule: `FREQ=WEEKLY;BYDAY=${byday}` };
+      const bydayMap = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+      const byday = daysOfWeek.map(d => bydayMap[d]).join(',');
+      // Build simple RRULE and also keep daysOfWeek as array 1..7 where Monday=1 for matchesRecurrence
+      const dowForMatch = daysOfWeek.map(d => (d === 0 ? 7 : d));
+      recurrence = { daysOfWeek: dowForMatch, rrule: `FREQ=WEEKLY;BYDAY=${byday}` };
     } else if (recType === 'custom') {
-      const rtext = (document.getElementById('qamRRuleInput')||{}).value.trim();
+      const rtext = (document.getElementById('qamRRuleInput') || {}).value.trim();
       if (rtext) recurrence = { rrule: rtext };
     }
 
     if (__qamState.mode === 'add') {
       const item = { title, createdAt: new Date().toISOString() };
       // attach assignedDate for calendar day mapping
-      try { item.assignedDate = (__qamState.date && __qamState.date.toISOString) ? __qamState.date.toISOString().split('T')[0] : null; } catch(e) { item.assignedDate = null; }
+      try { item.assignedDate = (__qamState.date && __qamState.date.toISOString) ? __qamState.date.toISOString().split('T')[0] : null; } catch (e) { item.assignedDate = null; }
       if (recurrence) item.recurrence = recurrence;
       choreData[member][section].push(item);
     } else if (__qamState.mode === 'edit') {
@@ -1585,14 +1698,14 @@ function performQuickDelete() {
     console.debug('performQuickDelete start', __qamState);
     if (!__qamState) return closeQuickActionModal();
     if (__qamState.mode !== 'edit') return alert('Nothing to delete');
-    const member = __qamState.member || (document.getElementById('qamMember')||{}).value;
-    const section = __qamState.section || (document.getElementById('qamSection')||{}).value;
+    const member = __qamState.member || (document.getElementById('qamMember') || {}).value;
+    const section = __qamState.section || (document.getElementById('qamSection') || {}).value;
     const idx = __qamState.originalIndex;
     const arr = choreData[member] && choreData[member][section];
     console.debug('deleting from', member, section, 'index', idx, 'arrLen', arr && arr.length);
     if (!arr || !arr[idx]) { console.warn('Original chore not found for delete', member, section, idx); return alert('Original chore not found'); }
     if (!confirm('Delete this chore?')) return;
-    arr.splice(idx,1);
+    arr.splice(idx, 1);
     saveAll();
     closeQuickActionModal();
     renderMonth();
@@ -1856,9 +1969,9 @@ function addDragAndDropHandlers(list, memberName, timeLabel) {
 }
 
 function renderBoard() {
-    //console.log("Rendering board with data:", choreData); // Debug log
- 
-    const board = document.getElementById("kanban");
+  //console.log("Rendering board with data:", choreData); // Debug log
+
+  const board = document.getElementById("kanban");
   board.innerHTML = "";
 
   family.forEach((member) => {
@@ -2067,8 +2180,8 @@ function renderBoard() {
         }
       }
       frequencySelect.addEventListener("change", moveAddButtonsBelowCheckboxes);
-      updateDaysCheckboxesAdd = (function(orig) {
-        return function() {
+      updateDaysCheckboxesAdd = (function (orig) {
+        return function () {
           orig && orig();
           moveAddButtonsBelowCheckboxes();
         };
@@ -2161,9 +2274,9 @@ function renderBoard() {
       const today = new Date();
       const dayName = today.toLocaleDateString('en-US', { weekday: 'long' });
       const chores = (choreData[member.name][label] || []).filter((chore) => {
-        
-          console.log("morning error chores 1 - "+choreData[member.name][label]);
-        
+
+        console.log("morning error chores 1 - " + choreData[member.name][label]);
+
         const choreKey = `${member.name}-${chore}`;
         const freq = choreFrequencies[choreKey];
         if (freq === 'weekly') {
@@ -2180,16 +2293,16 @@ function renderBoard() {
         li.style.backgroundColor = shadeColor(member.color, -30);
         li.setAttribute("draggable", "true");
         // Get difficulty and star count
-  const choreKey = `${member.name}-${choreTitle}`;
+        const choreKey = `${member.name}-${choreTitle}`;
         const difficulty = choreDifficulties[choreKey] || "easy";
         const stars = difficultyStars[difficulty] || 1;
         let starDisplay = '';
         if (difficulty === "easy") starDisplay = '🟢 1⭐';
         else if (difficulty === "medium") starDisplay = '🟡 2⭐';
         else if (difficulty === "hard") starDisplay = '🔴 3⭐';
-  // Safely escape angle brackets in title for insertion into innerHTML
-  const safeTitle = (choreTitle || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  li.innerHTML = `
+        // Safely escape angle brackets in title for insertion into innerHTML
+        const safeTitle = (choreTitle || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        li.innerHTML = `
   <span class="chore-number">${choreIndex + 1}.</span>
   <span class="chore-emoji">${getEmojiForChore(chore)}</span>
   <span class="chore-text">${safeTitle}</span>
@@ -2197,253 +2310,253 @@ function renderBoard() {
   <button class="edit-chore-btn" title="Edit chore ⚙️" style="margin-left:auto; background:none; border:none; color:white; cursor:pointer;">⚙️</button>
 `;
         const editBtn = li.querySelector(".edit-chore-btn");
-editBtn.addEventListener("click", (e) => {
-  e.stopPropagation(); // prevent chore completion on click
+        editBtn.addEventListener("click", (e) => {
+          e.stopPropagation(); // prevent chore completion on click
 
-  // Create the popup
-  const popup = document.createElement("div");
-  popup.style.position = "fixed";
-  popup.style.top = "50%";
-  popup.style.left = "50%";
-  popup.style.transform = "translate(-50%, -50%)";
-  popup.style.background = "white";
-  popup.style.padding = "1rem";
-  popup.style.borderRadius = "8px";
-  popup.style.boxShadow = "0 2px 10px rgba(0,0,0,0.3)";
-  popup.style.zIndex = 1000;
+          // Create the popup
+          const popup = document.createElement("div");
+          popup.style.position = "fixed";
+          popup.style.top = "50%";
+          popup.style.left = "50%";
+          popup.style.transform = "translate(-50%, -50%)";
+          popup.style.background = "white";
+          popup.style.padding = "1rem";
+          popup.style.borderRadius = "8px";
+          popup.style.boxShadow = "0 2px 10px rgba(0,0,0,0.3)";
+          popup.style.zIndex = 1000;
 
-  // Chore Name
-  const nameLabel = document.createElement("label");
-  nameLabel.textContent = "Chore Name:";
-  nameLabel.style.display = "block";
-  nameLabel.style.marginBottom = "0.2rem";
-  const editInput = document.createElement("input");
-  editInput.type = "text";
-  editInput.value = choreTitle;
-  editInput.style.marginBottom = "0.5rem";
-  editInput.style.width = "100%";
+          // Chore Name
+          const nameLabel = document.createElement("label");
+          nameLabel.textContent = "Chore Name:";
+          nameLabel.style.display = "block";
+          nameLabel.style.marginBottom = "0.2rem";
+          const editInput = document.createElement("input");
+          editInput.type = "text";
+          editInput.value = choreTitle;
+          editInput.style.marginBottom = "0.5rem";
+          editInput.style.width = "100%";
 
-  // Time
-  const timeLabelEl = document.createElement("label");
-  timeLabelEl.textContent = "Time:";
-  timeLabelEl.style.display = "block";
-  timeLabelEl.style.marginBottom = "0.2rem";
-  const select = document.createElement("select");
-  select.style.width = "100%";
-  select.style.marginBottom = "0.5rem";
-  timeSections.forEach(({ label: timeLabel }) => {
-    console.log("morning error renderboard 3");
-    const option = document.createElement("option");
-    option.value = timeLabel;
-    option.textContent = timeLabel;
-    if (timeLabel === label) option.selected = true;
-    select.appendChild(option);
-  });
+          // Time
+          const timeLabelEl = document.createElement("label");
+          timeLabelEl.textContent = "Time:";
+          timeLabelEl.style.display = "block";
+          timeLabelEl.style.marginBottom = "0.2rem";
+          const select = document.createElement("select");
+          select.style.width = "100%";
+          select.style.marginBottom = "0.5rem";
+          timeSections.forEach(({ label: timeLabel }) => {
+            console.log("morning error renderboard 3");
+            const option = document.createElement("option");
+            option.value = timeLabel;
+            option.textContent = timeLabel;
+            if (timeLabel === label) option.selected = true;
+            select.appendChild(option);
+          });
 
-  // Difficulty
-  const diffLabel = document.createElement("label");
-  diffLabel.textContent = "Difficulty:";
-  diffLabel.style.display = "block";
-  diffLabel.style.marginBottom = "0.2rem";
-  const difficultySelect = document.createElement("select");
-  difficultySelect.style.width = "100%";
-  difficultySelect.style.marginBottom = "0.5rem";
-  [
-    { value: "easy", text: "🟢 Easy (1 ⭐)" },
-    { value: "medium", text: "🟡 Medium (2 ⭐)" },
-    { value: "hard", text: "🔴 Hard (3 ⭐)" }
-  ].forEach(opt => {
-    const option = document.createElement("option");
-    option.value = opt.value;
-    option.textContent = opt.text;
-    difficultySelect.appendChild(option);
-  });
-  // Set current value if exists
-  const choreKey = `${member.name}-${choreTitle}`;
-  difficultySelect.value = choreDifficulties[choreKey] || "easy";
+          // Difficulty
+          const diffLabel = document.createElement("label");
+          diffLabel.textContent = "Difficulty:";
+          diffLabel.style.display = "block";
+          diffLabel.style.marginBottom = "0.2rem";
+          const difficultySelect = document.createElement("select");
+          difficultySelect.style.width = "100%";
+          difficultySelect.style.marginBottom = "0.5rem";
+          [
+            { value: "easy", text: "🟢 Easy (1 ⭐)" },
+            { value: "medium", text: "🟡 Medium (2 ⭐)" },
+            { value: "hard", text: "🔴 Hard (3 ⭐)" }
+          ].forEach(opt => {
+            const option = document.createElement("option");
+            option.value = opt.value;
+            option.textContent = opt.text;
+            difficultySelect.appendChild(option);
+          });
+          // Set current value if exists
+          const choreKey = `${member.name}-${choreTitle}`;
+          difficultySelect.value = choreDifficulties[choreKey] || "easy";
 
-  // Frequency
-  const freqLabel = document.createElement("label");
-  freqLabel.textContent = "Frequency:";
-  freqLabel.style.display = "block";
-  freqLabel.style.marginBottom = "0.2rem";
-  const editFrequencySelect = document.createElement("select");
-  editFrequencySelect.style.width = "100%";
-  editFrequencySelect.style.marginBottom = "0.5rem";
-  [
-    { value: "none", text: "None" },
-    { value: "daily", text: "Daily Chore" },
-    { value: "weekly", text: "Weekly Chore" }
-  ].forEach(opt => {
-    const option = document.createElement("option");
-    option.value = opt.value;
-    option.textContent = opt.text;
-    editFrequencySelect.appendChild(option);
-  });
-  // Set current value if exists
-  const editChoreKey = `${member.name}-${choreTitle}`;
-  // Set default frequency to 'none' if not set
-  editFrequencySelect.value = (editChoreKey in choreFrequencies) ? choreFrequencies[editChoreKey] : "none";
-  // Helper to create days of week checkboxes
-  function createDaysOfWeekCheckboxes(selectedDays = []) {
-    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-    const container = document.createElement("div");
-    container.style.display = "flex";
-    container.style.flexWrap = "wrap";
-    container.style.gap = "0.5rem";
-    days.forEach(day => {
-      const label = document.createElement("label");
-      label.style.display = "flex";
-      label.style.alignItems = "center";
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.value = day;
-      if (selectedDays.includes(day)) checkbox.checked = true;
-      label.appendChild(checkbox);
-      label.appendChild(document.createTextNode(day));
-      container.appendChild(label);
-    });
-    return container;
-  }
+          // Frequency
+          const freqLabel = document.createElement("label");
+          freqLabel.textContent = "Frequency:";
+          freqLabel.style.display = "block";
+          freqLabel.style.marginBottom = "0.2rem";
+          const editFrequencySelect = document.createElement("select");
+          editFrequencySelect.style.width = "100%";
+          editFrequencySelect.style.marginBottom = "0.5rem";
+          [
+            { value: "none", text: "None" },
+            { value: "daily", text: "Daily Chore" },
+            { value: "weekly", text: "Weekly Chore" }
+          ].forEach(opt => {
+            const option = document.createElement("option");
+            option.value = opt.value;
+            option.textContent = opt.text;
+            editFrequencySelect.appendChild(option);
+          });
+          // Set current value if exists
+          const editChoreKey = `${member.name}-${choreTitle}`;
+          // Set default frequency to 'none' if not set
+          editFrequencySelect.value = (editChoreKey in choreFrequencies) ? choreFrequencies[editChoreKey] : "none";
+          // Helper to create days of week checkboxes
+          function createDaysOfWeekCheckboxes(selectedDays = []) {
+            const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+            const container = document.createElement("div");
+            container.style.display = "flex";
+            container.style.flexWrap = "wrap";
+            container.style.gap = "0.5rem";
+            days.forEach(day => {
+              const label = document.createElement("label");
+              label.style.display = "flex";
+              label.style.alignItems = "center";
+              const checkbox = document.createElement("input");
+              checkbox.type = "checkbox";
+              checkbox.value = day;
+              if (selectedDays.includes(day)) checkbox.checked = true;
+              label.appendChild(checkbox);
+              label.appendChild(document.createTextNode(day));
+              container.appendChild(label);
+            });
+            return container;
+          }
 
-  // Days of week checkboxes
-  let editDaysCheckboxesContainer = null;
-  function updateDaysCheckboxesEdit() {
-    if (editDaysCheckboxesContainer && editDaysCheckboxesContainer.parentNode) editDaysCheckboxesContainer.parentNode.removeChild(editDaysCheckboxesContainer);
-    if (editFrequencySelect.value === "weekly") {
-      const editChoreKey = `${member.name}-${chore}`;
-      const selected = choreWeeklyDays[editChoreKey] || [];
-      editDaysCheckboxesContainer = createDaysOfWeekCheckboxes(selected);
-      popup.appendChild(editDaysCheckboxesContainer);
-    } else {
-      editDaysCheckboxesContainer = null;
-    }
-  }
-  editFrequencySelect.addEventListener("change", updateDaysCheckboxesEdit);
-  updateDaysCheckboxesEdit();
+          // Days of week checkboxes
+          let editDaysCheckboxesContainer = null;
+          function updateDaysCheckboxesEdit() {
+            if (editDaysCheckboxesContainer && editDaysCheckboxesContainer.parentNode) editDaysCheckboxesContainer.parentNode.removeChild(editDaysCheckboxesContainer);
+            if (editFrequencySelect.value === "weekly") {
+              const editChoreKey = `${member.name}-${chore}`;
+              const selected = choreWeeklyDays[editChoreKey] || [];
+              editDaysCheckboxesContainer = createDaysOfWeekCheckboxes(selected);
+              popup.appendChild(editDaysCheckboxesContainer);
+            } else {
+              editDaysCheckboxesContainer = null;
+            }
+          }
+          editFrequencySelect.addEventListener("change", updateDaysCheckboxesEdit);
+          updateDaysCheckboxesEdit();
 
-  // Buttons
-  const saveBtn = document.createElement("button");
-  saveBtn.textContent = "Save";
-  saveBtn.style.marginRight = "0.5rem";
-  saveBtn.style.padding = '0.5rem 1rem';
-  saveBtn.style.borderRadius = '6px';
+          // Buttons
+          const saveBtn = document.createElement("button");
+          saveBtn.textContent = "Save";
+          saveBtn.style.marginRight = "0.5rem";
+          saveBtn.style.padding = '0.5rem 1rem';
+          saveBtn.style.borderRadius = '6px';
 
-  const cancelBtn = document.createElement("button");
-  cancelBtn.textContent = "Cancel";
-  cancelBtn.style.marginRight = "0.5rem";
-  cancelBtn.style.padding = '0.5rem 1rem';
-  cancelBtn.style.borderRadius = '6px';
+          const cancelBtn = document.createElement("button");
+          cancelBtn.textContent = "Cancel";
+          cancelBtn.style.marginRight = "0.5rem";
+          cancelBtn.style.padding = '0.5rem 1rem';
+          cancelBtn.style.borderRadius = '6px';
 
-  const deleteBtn = document.createElement("button");
-  deleteBtn.textContent = "Delete";
-  deleteBtn.style.background = '#7e2f27ff';
-  deleteBtn.style.color = 'white';
-  deleteBtn.style.border = 'none';
-  deleteBtn.style.padding = '0.5rem 1rem';
-  deleteBtn.style.borderRadius = '6px';
-  deleteBtn.style.marginRight = '0';
+          const deleteBtn = document.createElement("button");
+          deleteBtn.textContent = "Delete";
+          deleteBtn.style.background = '#7e2f27ff';
+          deleteBtn.style.color = 'white';
+          deleteBtn.style.border = 'none';
+          deleteBtn.style.padding = '0.5rem 1rem';
+          deleteBtn.style.borderRadius = '6px';
+          deleteBtn.style.marginRight = '0';
 
-  // Button row (Save, Cancel, Delete)
-  const btnRow = document.createElement('div');
-  btnRow.style.display = 'flex';
-  btnRow.style.gap = '0.5rem';
-  btnRow.style.marginTop = '0.5rem';
-  btnRow.appendChild(saveBtn);
-  btnRow.appendChild(cancelBtn);
-  btnRow.appendChild(deleteBtn);
+          // Button row (Save, Cancel, Delete)
+          const btnRow = document.createElement('div');
+          btnRow.style.display = 'flex';
+          btnRow.style.gap = '0.5rem';
+          btnRow.style.marginTop = '0.5rem';
+          btnRow.appendChild(saveBtn);
+          btnRow.appendChild(cancelBtn);
+          btnRow.appendChild(deleteBtn);
 
-  // Build popup
-  popup.appendChild(nameLabel);
-  popup.appendChild(editInput);
-  popup.appendChild(timeLabelEl);
-  popup.appendChild(select);
-  popup.appendChild(diffLabel);
-  popup.appendChild(difficultySelect);
-  popup.appendChild(freqLabel);
-  popup.appendChild(editFrequencySelect);
-  if (editDaysCheckboxesContainer) popup.appendChild(editDaysCheckboxesContainer);
-  popup.appendChild(btnRow);
-  document.body.appendChild(popup);
+          // Build popup
+          popup.appendChild(nameLabel);
+          popup.appendChild(editInput);
+          popup.appendChild(timeLabelEl);
+          popup.appendChild(select);
+          popup.appendChild(diffLabel);
+          popup.appendChild(difficultySelect);
+          popup.appendChild(freqLabel);
+          popup.appendChild(editFrequencySelect);
+          if (editDaysCheckboxesContainer) popup.appendChild(editDaysCheckboxesContainer);
+          popup.appendChild(btnRow);
+          document.body.appendChild(popup);
 
-  // If days checkboxes are added/removed, keep button row always at the bottom
-  function updateButtonRowPosition() {
-    // Remove btnRow if already present
-    if (btnRow.parentNode) btnRow.parentNode.removeChild(btnRow);
-    // Always append at the end
-    popup.appendChild(btnRow);
-  }
-  editFrequencySelect.addEventListener("change", () => {
-    updateDaysCheckboxesEdit();
-    updateButtonRowPosition();
-  });
+          // If days checkboxes are added/removed, keep button row always at the bottom
+          function updateButtonRowPosition() {
+            // Remove btnRow if already present
+            if (btnRow.parentNode) btnRow.parentNode.removeChild(btnRow);
+            // Always append at the end
+            popup.appendChild(btnRow);
+          }
+          editFrequencySelect.addEventListener("change", () => {
+            updateDaysCheckboxesEdit();
+            updateButtonRowPosition();
+          });
 
-  // Save logic
-  saveBtn.addEventListener("click", () => {
-    const newText = editInput.value.trim();
-    const newTab = select.value;
-    const newDifficulty = difficultySelect.value;
-    const newFrequency = editFrequencySelect.value;
+          // Save logic
+          saveBtn.addEventListener("click", () => {
+            const newText = editInput.value.trim();
+            const newTab = select.value;
+            const newDifficulty = difficultySelect.value;
+            const newFrequency = editFrequencySelect.value;
 
-    let newSelectedDays = [];
-    if (newFrequency === "weekly" && editDaysCheckboxesContainer) {
-      newSelectedDays = Array.from(editDaysCheckboxesContainer.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
-      if (newSelectedDays.length === 0) {
-        alert("Please select at least one day for a weekly chore.");
-        return;
-      }
-    }
+            let newSelectedDays = [];
+            if (newFrequency === "weekly" && editDaysCheckboxesContainer) {
+              newSelectedDays = Array.from(editDaysCheckboxesContainer.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+              if (newSelectedDays.length === 0) {
+                alert("Please select at least one day for a weekly chore.");
+                return;
+              }
+            }
 
-  if (!newText) return alert("Please enter chore text.");
+            if (!newText) return alert("Please enter chore text.");
 
-    // If tab is changed, move to end of new tab
-    if (newTab !== label) {
-      // Remove old chore from current tab
-      choreData[member.name][label].splice(choreIndex, 1);
-      choreData[member.name][newTab].push(newText);
-    } else {
-      // Only update text/difficulty, keep position
-      // Preserve object shape if original was an object
-      if (typeof chore === 'string') choreData[member.name][label][choreIndex] = newText;
-      else {
-        const existing = choreData[member.name][label][choreIndex];
-        if (existing && typeof existing === 'object') existing.title = newText;
-        else choreData[member.name][label][choreIndex] = newText;
-      }
-    }
-    // Save difficulty
-    const newChoreKey = `${member.name}-${newText}`;
-    choreDifficulties[newChoreKey] = newDifficulty;
-    choreFrequencies[newChoreKey] = newFrequency;
-    choreWeeklyDays[newChoreKey] = newSelectedDays;
+            // If tab is changed, move to end of new tab
+            if (newTab !== label) {
+              // Remove old chore from current tab
+              choreData[member.name][label].splice(choreIndex, 1);
+              choreData[member.name][newTab].push(newText);
+            } else {
+              // Only update text/difficulty, keep position
+              // Preserve object shape if original was an object
+              if (typeof chore === 'string') choreData[member.name][label][choreIndex] = newText;
+              else {
+                const existing = choreData[member.name][label][choreIndex];
+                if (existing && typeof existing === 'object') existing.title = newText;
+                else choreData[member.name][label][choreIndex] = newText;
+              }
+            }
+            // Save difficulty
+            const newChoreKey = `${member.name}-${newText}`;
+            choreDifficulties[newChoreKey] = newDifficulty;
+            choreFrequencies[newChoreKey] = newFrequency;
+            choreWeeklyDays[newChoreKey] = newSelectedDays;
 
-    saveAll();
-    renderBoard();
-    updateChart();
-    document.body.removeChild(popup);
-  });
+            saveAll();
+            renderBoard();
+            updateChart();
+            document.body.removeChild(popup);
+          });
 
-  // Delete logic
-  deleteBtn.addEventListener("click", () => {
-    showConfirmPopup(`Are you sure you want to delete the chore "${choreTitle}"?`, () => {
-      choreData[member.name][label].splice(choreIndex, 1);
-      // Remove difficulty, frequency, and weekly days entries
-      const delChoreKey = `${member.name}-${choreTitle}`;
-      delete choreDifficulties[delChoreKey];
-      delete choreFrequencies[delChoreKey];
-      delete choreWeeklyDays[delChoreKey];
-      saveAll();
-      renderBoard();
-      updateChart();
-      document.body.removeChild(popup);
-    });
-  });
+          // Delete logic
+          deleteBtn.addEventListener("click", () => {
+            showConfirmPopup(`Are you sure you want to delete the chore "${choreTitle}"?`, () => {
+              choreData[member.name][label].splice(choreIndex, 1);
+              // Remove difficulty, frequency, and weekly days entries
+              const delChoreKey = `${member.name}-${choreTitle}`;
+              delete choreDifficulties[delChoreKey];
+              delete choreFrequencies[delChoreKey];
+              delete choreWeeklyDays[delChoreKey];
+              saveAll();
+              renderBoard();
+              updateChart();
+              document.body.removeChild(popup);
+            });
+          });
 
-  // Cancel logic
-  cancelBtn.addEventListener("click", () => {
-    document.body.removeChild(popup);
-  });
-});
+          // Cancel logic
+          cancelBtn.addEventListener("click", () => {
+            document.body.removeChild(popup);
+          });
+        });
 
         li.addEventListener("click", () => {
           // Check if chore requires photo proof
@@ -2455,13 +2568,13 @@ editBtn.addEventListener("click", (e) => {
           }*/
 
           // Check difficulty and show modal if not set
-         /* const choreKey = `${member.name}-${chore}`;
-          if (!choreDifficulties[choreKey]) {
-            showDifficultyModal(member, chore, () => {
-              completeChore(member, label, choreIndex, chore);
-            });
-            return;
-          }*/
+          /* const choreKey = `${member.name}-${chore}`;
+           if (!choreDifficulties[choreKey]) {
+             showDifficultyModal(member, chore, () => {
+               completeChore(member, label, choreIndex, chore);
+             });
+             return;
+           }*/
 
           showConfirmPopup(`Mark chore "${choreTitle}" as completed?`, () => {
             // pass the original stored chore (object or string) to completeChore
@@ -2497,33 +2610,33 @@ editBtn.addEventListener("click", (e) => {
 
 
       //to call drag & drop handler
-addDragAndDropHandlers(list, member.name, label);
+      addDragAndDropHandlers(list, member.name, label);
 
       tabContent.appendChild(list);
       tabContentsContainer.appendChild(tabContent);
 
       // Tab button click event
-     /* tabBtn.addEventListener("click", () => {
-        // Remove active class from all buttons and tab contents
+      /* tabBtn.addEventListener("click", () => {
+         // Remove active class from all buttons and tab contents
+         tabs.querySelectorAll(".tab-button").forEach(btn => btn.classList.remove("active"));
+         tabContentsContainer.querySelectorAll(".tab-content").forEach(tc => tc.classList.remove("active"));
+ 
+         // Add active class to clicked tab and corresponding content
+         tabBtn.classList.add("active");
+         tabContent.classList.add("active");
+       });*/
+      tabBtn.addEventListener("click", () => {
+        // Update activeTabs for this member
+        activeTabs[member.name] = label;
+
+        // Remove active classes from this member's tabs
         tabs.querySelectorAll(".tab-button").forEach(btn => btn.classList.remove("active"));
         tabContentsContainer.querySelectorAll(".tab-content").forEach(tc => tc.classList.remove("active"));
 
-        // Add active class to clicked tab and corresponding content
+        // Add active class to clicked tab and content
         tabBtn.classList.add("active");
         tabContent.classList.add("active");
-      });*/
-      tabBtn.addEventListener("click", () => {
-  // Update activeTabs for this member
-  activeTabs[member.name] = label;
-
-  // Remove active classes from this member's tabs
-  tabs.querySelectorAll(".tab-button").forEach(btn => btn.classList.remove("active"));
-  tabContentsContainer.querySelectorAll(".tab-content").forEach(tc => tc.classList.remove("active"));
-
-  // Add active class to clicked tab and content
-  tabBtn.classList.add("active");
-  tabContent.classList.add("active");
-});
+      });
 
     });
 
@@ -2564,7 +2677,7 @@ addDragAndDropHandlers(list, member.name, label);
       `;
       document.body.appendChild(popup);
       document.getElementById('deductStarsInput').focus();
-      document.getElementById('deductStarsConfirm').onclick = function() {
+      document.getElementById('deductStarsConfirm').onclick = function () {
         const toDeduct = parseInt(document.getElementById('deductStarsInput').value);
         const reason = document.getElementById('deductReasonInput').value.trim();
         if (!toDeduct || isNaN(toDeduct) || toDeduct < 1) return;
@@ -2584,7 +2697,7 @@ addDragAndDropHandlers(list, member.name, label);
         renderBoard();
         updateChart && updateChart();
       };
-      document.getElementById('deductStarsCancel').onclick = function() {
+      document.getElementById('deductStarsCancel').onclick = function () {
         document.body.removeChild(popup);
       };
     });
@@ -2605,16 +2718,16 @@ addDragAndDropHandlers(list, member.name, label);
   });
 
   saveAll();
-    // Fallback: ensure each member column has an active tab; if not, activate the first tab (Morning)
-    try {
-      document.querySelectorAll('#kanban .column').forEach(col => {
-        const activeBtn = col.querySelector('.tab-button.active');
-        if (!activeBtn) {
-          const firstBtn = col.querySelector('.tab-button');
-          if (firstBtn) firstBtn.click();
-        }
-      });
-    } catch (e) { console.warn('auto-activate tab fallback failed', e); }
+  // Fallback: ensure each member column has an active tab; if not, activate the first tab (Morning)
+  try {
+    document.querySelectorAll('#kanban .column').forEach(col => {
+      const activeBtn = col.querySelector('.tab-button.active');
+      if (!activeBtn) {
+        const firstBtn = col.querySelector('.tab-button');
+        if (firstBtn) firstBtn.click();
+      }
+    });
+  } catch (e) { console.warn('auto-activate tab fallback failed', e); }
 }
 
 function completeChore(member, timeLabel, choreIndex, chore) {
@@ -2707,23 +2820,23 @@ function initVoiceRecognition() {
     voiceRecognition.interimResults = false;
     voiceRecognition.lang = 'en-US';
 
-    voiceRecognition.onstart = function() {
+    voiceRecognition.onstart = function () {
       document.getElementById('voiceStatus').textContent = 'Listening... Say something like "Add brush teeth to Mom morning"';
       document.getElementById('voiceButton').textContent = '🎤 Listening...';
     };
 
-    voiceRecognition.onresult = function(event) {
+    voiceRecognition.onresult = function (event) {
       const result = event.results[0][0].transcript;
       document.getElementById('voiceResult').textContent = `You said: "${result}"`;
       processVoiceCommand(result);
     };
 
-    voiceRecognition.onerror = function(event) {
+    voiceRecognition.onerror = function (event) {
       document.getElementById('voiceStatus').textContent = `Error: ${event.error}`;
       document.getElementById('voiceButton').textContent = '🎤 Start Listening';
     };
 
-    voiceRecognition.onend = function() {
+    voiceRecognition.onend = function () {
       document.getElementById('voiceButton').textContent = '🎤 Start Listening';
     };
   }
@@ -2744,10 +2857,10 @@ function processVoiceCommand(command) {
     const member = family.find(m => m.name.toLowerCase() === memberName.toLowerCase());
 
     if (member && timeSections.find(t => t.label === timeLabel)) {
-  // Ensure structures exist
-  if (!choreData[member.name]) choreData[member.name] = { Morning: [], Afternoon: [], Evening: [] };
-  if (!Array.isArray(choreData[member.name][timeLabel])) choreData[member.name][timeLabel] = [];
-  choreData[member.name][timeLabel].push(choreName);
+      // Ensure structures exist
+      if (!choreData[member.name]) choreData[member.name] = { Morning: [], Afternoon: [], Evening: [] };
+      if (!Array.isArray(choreData[member.name][timeLabel])) choreData[member.name][timeLabel] = [];
+      choreData[member.name][timeLabel].push(choreName);
       document.getElementById('voiceStatus').textContent = `✅ Added "${choreName}" to ${member.name}'s ${timeLabel} chores!`;
       saveAll();
       renderBoard();
@@ -3101,7 +3214,7 @@ function saveAll() {
     localStorage.setItem("familyGoals", JSON.stringify(familyGoals));
     localStorage.setItem("rewards", JSON.stringify(rewards));
     localStorage.setItem("redeemedRewards", JSON.stringify(redeemedRewards));
-   // localStorage.setItem("chorePhotos", JSON.stringify(chorePhotos));
+    // localStorage.setItem("chorePhotos", JSON.stringify(chorePhotos));
     localStorage.setItem("choreDifficulties", JSON.stringify(choreDifficulties));
     localStorage.setItem("choreFrequencies", JSON.stringify(choreFrequencies));
     localStorage.setItem("choreWeeklyDays", JSON.stringify(choreWeeklyDays));
@@ -3129,8 +3242,8 @@ function saveAll() {
     }
   } catch (error) {
     console.error('Error saving data:', error);
-    }
   }
+}
 
 
 // Modal Event Listeners
@@ -3283,7 +3396,7 @@ function initModalEventListeners() {
       `;
       document.body.appendChild(popup);
 
-      document.getElementById('saveNewReward').onclick = function() {
+      document.getElementById('saveNewReward').onclick = function () {
         const name = document.getElementById('newRewardName').value.trim();
         const description = document.getElementById('newRewardDesc').value.trim();
         const cost = parseInt(document.getElementById('newRewardCost').value);
@@ -3302,7 +3415,7 @@ function initModalEventListeners() {
         renderRewards();
         document.body.removeChild(popup);
       };
-      document.getElementById('cancelNewReward').onclick = function() {
+      document.getElementById('cancelNewReward').onclick = function () {
         document.body.removeChild(popup);
       };
     });
@@ -3329,12 +3442,12 @@ function initModalEventListeners() {
         modal.style.display = 'none';
 
         // Stop camera if photo modal is being closed
-       /* if (modalId === 'photoModal') {
-          const video = document.getElementById('cameraPreview');
-          if (video.srcObject) {
-            video.srcObject.getTracks().forEach(track => track.stop());
-          }
-        }*/
+        /* if (modalId === 'photoModal') {
+           const video = document.getElementById('cameraPreview');
+           if (video.srcObject) {
+             video.srcObject.getTracks().forEach(track => track.stop());
+           }
+         }*/
       });
     }
 
@@ -3506,7 +3619,7 @@ function showTitleAvatarPopup() {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = function(e) {
+      reader.onload = function (e) {
         preview.style.backgroundImage = `url(${e.target.result})`;
         preview.style.backgroundSize = "cover";
         preview.style.backgroundPosition = "center";
@@ -3520,7 +3633,7 @@ function showTitleAvatarPopup() {
     const file = fileInput.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = function(e) {
+      reader.onload = function (e) {
         titleAvatarData = e.target.result;
         localStorage.setItem("titleAvatarData", titleAvatarData);
         const titleAvatar = document.getElementById("titleAvatar");
@@ -3719,11 +3832,11 @@ function renderRewards() {
         <div class="reward-cost">💰 ${reward.cost} ⭐</div>
         <select class="member-select" data-reward-id="${reward.id}">
           <option value="">Choose member</option>
-          ${family.map(member => 
-            `<option value="${member.name}" ${starsData[member.name] >= reward.cost ? '' : 'disabled'}>
+          ${family.map(member =>
+      `<option value="${member.name}" ${starsData[member.name] >= reward.cost ? '' : 'disabled'}>
               ${member.name} (${starsData[member.name]} ⭐)
             </option>`
-          ).join('')}
+    ).join('')}
         </select>
         <div class="reward-btn-row" style="display:flex; gap:0.5rem; margin-top:0.7rem; align-items:center; flex-wrap:wrap;">
           <button onclick="redeemReward(${reward.id})" class="redeem-btn">🎁 Redeem</button>
@@ -3741,13 +3854,13 @@ function renderRewards() {
 
   // Add event listeners for edit and delete buttons
   content.querySelectorAll('.edit-reward-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
+    btn.addEventListener('click', function () {
       const rewardId = parseInt(this.getAttribute('data-reward-id'));
       showEditRewardPopup(rewardId);
     });
   });
   content.querySelectorAll('.delete-reward-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
+    btn.addEventListener('click', function () {
       const rewardId = parseInt(this.getAttribute('data-reward-id'));
       deleteReward(rewardId);
     });
@@ -3775,7 +3888,7 @@ function showEditRewardPopup(rewardId) {
   `;
   document.body.appendChild(popup);
 
-  document.getElementById('saveEditReward').onclick = function() {
+  document.getElementById('saveEditReward').onclick = function () {
     const newName = document.getElementById('editRewardName').value.trim();
     const newDesc = document.getElementById('editRewardDesc').value.trim();
     const newCost = parseInt(document.getElementById('editRewardCost').value);
@@ -3790,7 +3903,7 @@ function showEditRewardPopup(rewardId) {
     renderRewards();
     document.body.removeChild(popup);
   };
-  document.getElementById('cancelEditReward').onclick = function() {
+  document.getElementById('cancelEditReward').onclick = function () {
     document.body.removeChild(popup);
   };
 }
@@ -3892,15 +4005,15 @@ function redeemReward(rewardId) {
     starsData[memberName] -= reward.cost;
 
     if (!redeemedRewards[memberName]) redeemedRewards[memberName] = [];
-        redeemedRewards[member.name].push({
-          name: reward.name,
-          cost: reward.cost,
-          date: new Date().toDateString()
-        });
-        localStorage.setItem('redeemedRewards', JSON.stringify(redeemedRewards));
-        saveAll();
-        renderRewards();
-        renderLeaderboard();
+    redeemedRewards[member.name].push({
+      name: reward.name,
+      cost: reward.cost,
+      date: new Date().toDateString()
+    });
+    localStorage.setItem('redeemedRewards', JSON.stringify(redeemedRewards));
+    saveAll();
+    renderRewards();
+    renderLeaderboard();
     renderRewards();
     updateChart();
 
@@ -3910,8 +4023,8 @@ function redeemReward(rewardId) {
 
 // (Initialization moved to the primary DOMContentLoaded handler earlier in the file)
 //document.getElementById("resetButton").addEventListener("click", resetDailyChores);
-document.getElementById("sidebarReset").addEventListener("click", function() {
-  showConfirmPopup("Are you sure you want to reset daily logs and stats? This cannot be undone.", function() {
+document.getElementById("sidebarReset").addEventListener("click", function () {
+  showConfirmPopup("Are you sure you want to reset daily logs and stats? This cannot be undone.", function () {
     resetDailyChores();
   });
 });
@@ -3941,7 +4054,7 @@ function addNewMember(name, color, avatar = null) {
   const newMember = { name: name.trim(), color: color, avatar: avatar };
   family.push(newMember);
 
-        console.log("setting morning as active tab for member 4.1");
+  console.log("setting morning as active tab for member 4.1");
 
   // Initialize data for new member
   choreData[newMember.name] = {
@@ -3949,12 +4062,12 @@ function addNewMember(name, color, avatar = null) {
     Afternoon: [...defaultChoresByTime.Afternoon],
     Evening: [...defaultChoresByTime.Evening],
   };
-        console.log("setting morning as active tab for member 5");
+  console.log("setting morning as active tab for member 5");
 
   starsData[newMember.name] = 0;
   weeklyStars[newMember.name] = {};
   activeTabs[newMember.name] = "Morning";
-        console.log("setting morning as active tab for member 6");
+  console.log("setting morning as active tab for member 6");
 
 
   saveAll();
@@ -4014,7 +4127,7 @@ function showAvatarChangePopup(member) {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = function(e) {
+      reader.onload = function (e) {
         preview.style.backgroundImage = `url(${e.target.result})`;
         preview.style.backgroundSize = "cover";
         preview.style.backgroundPosition = "center";
@@ -4029,7 +4142,7 @@ function showAvatarChangePopup(member) {
     const file = fileInput.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = function(e) {
+      reader.onload = function (e) {
         const memberIndex = family.findIndex(m => m.name === member.name);
         if (memberIndex !== -1) {
           family[memberIndex].avatar = e.target.result;
@@ -4104,15 +4217,15 @@ function renderWeeklySummary() {
 // Weather and time functionality
 function updateDateTime() {
   const now = new Date();
-  const dateOptions = { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
+  const dateOptions = {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
   };
-  const timeOptions = { 
-    hour: '2-digit', 
-    minute: '2-digit', 
+  const timeOptions = {
+    hour: '2-digit',
+    minute: '2-digit',
     second: '2-digit',
     hour12: true
   };
@@ -4136,7 +4249,7 @@ async function fetchWeather() {
     }
 
     // Request location permission explicitly
-    const permission = await navigator.permissions.query({name: 'geolocation'});
+    const permission = await navigator.permissions.query({ name: 'geolocation' });
     console.log('Geolocation permission status:', permission.state);
 
     if (permission.state === 'denied') {
@@ -4233,7 +4346,7 @@ function getCurrentPosition() {
         console.error('Geolocation error:', error);
         let errorMessage = 'Location access failed';
 
-        switch(error.code) {
+        switch (error.code) {
           case error.PERMISSION_DENIED:
             errorMessage = 'Location permission denied by user';
             break;
@@ -4569,7 +4682,7 @@ if (addMemberConfirm) {
 
     if (avatarFile) {
       const reader = new FileReader();
-      reader.onload = function(e) {
+      reader.onload = function (e) {
         addNewMember(name, color, e.target.result);
         addMemberPopup.classList.add("hidden");
       };
@@ -4623,7 +4736,7 @@ async function loadDataFromFirestore() {
       choreDifficulties = data.choreDifficulties || {};
       choreFrequencies = data.choreFrequencies || {};
       choreWeeklyDays = data.choreWeeklyDays || {};
-     
+
       console.log("Data loaded from Firestore!");
     } else {
       console.log("No data found in Firestore for this user.");
